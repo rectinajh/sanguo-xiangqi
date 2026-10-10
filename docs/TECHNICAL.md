@@ -302,3 +302,11 @@ Buffer 日（约 10/13 CST）**只修**：不能完局 / 不能扣费 / 不能 s
 ---
 
 *TECHNICAL · 对齐 FINAL PRD v1.0 与 IMPLEMENTATION_PLAN · 2026-10-11 Asia/Shanghai*
+
+
+## 11. Whale monetization (P0 addendum)
+
+- `Covenant.lockEarnest(gameId,hash,ply,seat,playBalanceHint)` — multi-pending + premium
+- `Covenant.lockPeaceOffer(..., bribeAmount, plies)` — 疏火 escrow → pay counterparty on activate with `CLAUSE_BUY_PEACE=4`
+- `GameTable.depositPlayBalance` — human only
+- P1 documented only: sponsor ally moveFee; anonymous rumor

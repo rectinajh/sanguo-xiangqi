@@ -1,67 +1,11 @@
-# Dependencies
 node_modules/
-.pnp
-.pnp.js
-.yarn/cache
-.yarn/unplugged
-.yarn/install-state.gz
-
-# Build / cache
 dist/
-build/
-out/
-.next/
-.turbo/
-.cache/
-coverage/
-*.tsbuildinfo
-
-# Foundry
+.env
+.DS_Store
+packages/shared/dist/
+frontend/dist/
 contracts/cache/
 contracts/out/
 contracts/broadcast/
-cache/
-out/
-broadcast/
-lib/
-
-# Env & secrets
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-!*.pub
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/*
-!.vscode/extensions.json
-*.swp
-*.swo
-
-# Logs & temp
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-tmp/
-temp/
-.tmpdir/
-
-# Agent / local
-agent/.env
-frontend/.env.local
-
-# Circuits artifacts (P1 deferred)
-circuits/build/
-circuits/pot/
-*.zkey
-*.wasm
-verification_key.json
-
-# Misc
-*.local
-.vercel
+.vite/

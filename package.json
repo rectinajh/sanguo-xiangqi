@@ -1,0 +1,19 @@
+{
+  "name": "sanguo-xiangqi",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter frontend dev",
+    "build:shared": "pnpm --filter @sanguo/shared build",
+    "test:shared": "pnpm --filter @sanguo/shared test",
+    "test:forge": "cd contracts && forge test",
+    "anvil": "anvil --chain-id 31337 --block-time 1",
+    "deploy:local": "bash scripts/deploy-local.sh",
+    "demo": "echo 'Open http://localhost:5173 and click \u4e00\u952e Demo \u810a\u9aa8'"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
