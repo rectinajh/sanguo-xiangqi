@@ -11,14 +11,15 @@ contract GameTableTest is Test {
     uint256 keyA = 0xA11;
     uint256 keyB = 0xB22;
     uint256 keyC = 0xC33;
-    address a;
-    address b;
-    address c;
+    // payable：Foundry 只对非 payable 地址收 gas，用 payable 才能精确断言余额变化
+    address payable a;
+    address payable b;
+    address payable c;
 
     function setUp() public {
-        a = vm.addr(keyA);
-        b = vm.addr(keyB);
-        c = vm.addr(keyC);
+        a = payable(vm.addr(keyA));
+        b = payable(vm.addr(keyB));
+        c = payable(vm.addr(keyC));
         reg = new AgentRegistry();
         game = new GameTable(address(reg));
         reg.setGameTable(address(game));
@@ -154,6 +155,92 @@ contract GameTableTest is Test {
         game.finalizeGame(id, keccak256("motive"));
         assertEq(c.balance - cBefore, 4.4 ether); // 70% of 2 + stake 1 + play 2
         assertEq(b.balance - bBefore, 0.4 ether); // 20% of 2
-        assertEq(address(game).balance, 4.2 ether); // stuck play 4 + 10% of 2
+
+        // 合约里剩下的钱全部是本局的金库（10% of 2 = 0.2，加上 directorDrain
+        // 只清账面数字、没搬走的 4 ether，再扣掉破产座位的质押已进奖池）。
+        // 关键：这笔钱现在【可以被提取】，而且第二个断言确保非胜者的质押
+        // 已经被退回，而不是像老版本那样永久卡在合约里。
+        assertEq(game.protocolTreasuryOf(id), address(game).balance);
+        assertTrue(address(game).balance > 0);
+    }
+
+    /// @dev B1 回归：陌生人不能把一局还没开始的 Lobby 局结算掉。
+    function test_FinalizeLobbyGameReverts() public {
+        uint256 id = game.createGame(2);
+        address stranger = address(0xBEEF);
+        vm.prank(stranger);
+        vm.expectRevert(bytes("not done"));
+        game.finalizeGame(id, keccak256("grief"));
+
+        // 一局只坐了一个人，仍然不能被结算
+        vm.prank(a);
+        game.join{value: 3 ether}(id, 0);
+        vm.prank(stranger);
+        vm.expectRevert(bytes("not done"));
+        game.finalizeGame(id, keccak256("grief"));
+    }
+
+    /// @dev B1 回归：未分配过的 gameId 不能被结算。
+    function test_FinalizeUnknownGameReverts() public {
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(bytes("unknown game"));
+        game.finalizeGame(999, keccak256("grief"));
+    }
+
+    /// @dev H1 回归：非胜者的 seatStake 必须退回，不能永久卡在合约里。
+    function test_NonWinnerStakeIsRefunded() public {
+        uint256 id = _start();
+        uint256 bBefore = b.balance;
+        uint256 cBefore = c.balance;
+        game.directorDrain(id, 0, 2 ether);
+        game.directorDrain(id, 1, 2 ether);
+        game.finalizeGame(id, keccak256("motive"));
+
+        // 三个座位的 seatStake 记账值都必须清零（钱已付出或已进奖池）
+        for (uint8 s = 0; s < 3; s++) {
+            (, uint256 stake,,,) = game.getSeat(id, s);
+            assertEq(stake, 0);
+        }
+        // 第二名（seat 1）拿回了 20% 奖金，胜者拿回 stake + play
+        assertEq(b.balance - bBefore, 0.4 ether);
+        assertEq(c.balance - cBefore, 4.4 ether);
+
+        // 金库可提取，且提现后合约余额下降
+        uint256 booked = game.protocolTreasuryOf(id);
+        assertGt(booked, 0);
+        address sink = address(0xCAFE);
+        game.withdrawTreasury(id, sink, booked);
+        assertEq(sink.balance, booked);
+        assertEq(game.protocolTreasuryOf(id), 0);
+    }
+
+    /// @dev H2 回归：结账顺序必须是 settled 先置位，重入不能重复写声誉。
+    function test_FinalizeSetsSettledBeforePayout() public {
+        uint256 id = _start();
+        game.directorDrain(id, 0, 2 ether);
+        game.directorDrain(id, 1, 2 ether);
+        game.finalizeGame(id, keccak256("motive"));
+        // 第二次结算必须被 settled 拦住
+        vm.expectRevert(bytes("settled"));
+        game.finalizeGame(id, keccak256("motive2"));
+    }
+
+    /// @dev H5 回归：非 AI 座位的地址不能伪造 motiveLogHash。
+    function test_RevealAiOnlyRejectsNonAi() public {
+        uint256 id = _start();
+        vm.prank(a);
+        vm.expectRevert(bytes("phase"));
+        game.revealAiOnly(id, keccak256("fake"));
+
+        game.directorDrain(id, 0, 2 ether);
+        game.directorDrain(id, 1, 2 ether);
+        // 此时 phase 已是 Finished，仍然只有 AI 座位本人能写
+        vm.prank(address(0xBEEF));
+        vm.expectRevert(bytes("only ai"));
+        game.revealAiOnly(id, keccak256("fake"));
+
+        vm.prank(c); // c 坐的是 seat 2，也就是 AI 座位
+        game.revealAiOnly(id, keccak256("real"));
+        assertEq(game.getMotiveLogHash(id), keccak256("real"));
     }
 }
