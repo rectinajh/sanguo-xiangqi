@@ -142,7 +142,9 @@ commitHash = keccak256(abi.encode(seat, from, to, piece, salt))
 
 - MVP：**回合制**当前方 commit → 立即进入 reveal 窗口（每步一笔确认）。
 - 非法 reveal：扣 `illegalRevealPenalty`；同 ply 最多 2 次后按超时。
-- 超时：先扣 `timeoutPenalty` → 再跑破产检查 → 否则弃权一步。
+- 超时：`expireCommit`。承诺超过 **60 秒**（`COMMIT_REVEAL_WINDOW`）未揭示，先扣 `timeoutPenalty` 0.03 MON → 再跑破产检查 → 否则弃权一步。演示不调用这条路径。
+- 破产门槛是该座当前最便宜的合法着；没有合法着同样出局。`seatStake` 不垫油费。
+- `forcedBurnMon`（声誉）= 另外两座已支付的 `moveFee` 之和，不是客户端字符串。
 
 ---
 

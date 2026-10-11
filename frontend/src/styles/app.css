@@ -129,60 +129,20 @@ button.danger {
 }
 
 .board-wrap { position: relative; }
-.board-grid {
-  display: grid;
-  grid-template-columns: repeat(11, 1fr);
-  gap: 2px;
-  background: #0a0d12;
-  border-radius: 12px;
-  padding: 8px;
-  aspect-ratio: 1;
-  max-width: 640px;
+.sanren {
+  width: 100%;
+  max-width: 680px;
   margin: 0 auto;
-  border: 1px solid rgba(230, 184, 77, 0.2);
+  background: #f3ecdf;
+  border-radius: 2px;
+  box-shadow: 0 10px 28px rgba(80, 30, 30, 0.18);
 }
-.cell {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 6px;
-  background: #1c2430;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: default;
+.sanren svg {
+  display: block;
+  width: 100%;
+  height: auto;
   user-select: none;
 }
-.cell.alt { background: #16202c; }
-.cell.legal {
-  background: rgba(230, 184, 77, 0.22);
-  box-shadow: inset 0 0 0 2px rgba(230, 184, 77, 0.55);
-  cursor: pointer;
-}
-.cell.selected {
-  box-shadow: inset 0 0 0 2px #fff;
-}
-.cell.capture-legal {
-  background: rgba(255, 92, 122, 0.25);
-  box-shadow: inset 0 0 0 2px rgba(255, 92, 122, 0.6);
-}
-.piece {
-  width: 86%;
-  height: 86%;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: clamp(0.65rem, 1.6vw, 0.95rem);
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
-  border: 2px solid rgba(255,255,255,0.25);
-}
-.piece.seat0 { background: radial-gradient(circle at 30% 25%, #ff8a7a, var(--red)); }
-.piece.seat1 { background: radial-gradient(circle at 30% 25%, #7eb6ff, var(--blue)); }
-.piece.seat2 { background: radial-gradient(circle at 30% 25%, #6fe0a8, var(--green)); }
-.piece.clickable { cursor: pointer; }
-.piece.clickable:hover { transform: scale(1.06); }
 
 .fee-tip {
   position: absolute;

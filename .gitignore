@@ -9,3 +9,5 @@ contracts/out/
 contracts/broadcast/
 *.log
 .vite/
+
+*.tsbuildinfo

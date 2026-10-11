@@ -8,9 +8,15 @@
     "test:forge": "cd contracts && forge test",
     "anvil": "anvil --chain-id 31337 --block-time 1",
     "deploy:local": "bash scripts/deploy-local.sh",
-    "demo": "echo 'Open http://localhost:5173 and click \u4e00\u952e Demo \u810a\u9aa8'"
+    "deploy:testnet": "bash scripts/deploy-testnet.sh",
+    "demo": "pnpm --filter @sanguo/shared build && tsx scripts/demo-harness.ts"
   },
   "packageManager": "pnpm@10.33.4",
+  "devDependencies": {
+    "@sanguo/shared": "workspace:*",
+    "tsx": "^4.20.5",
+    "viem": "^2.21.0"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"

@@ -220,6 +220,25 @@
   },
   {
     "type": "function",
+    "name": "activatedPlyOf",
+    "inputs": [
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "activeBySeat",
     "inputs": [
       {
@@ -279,99 +298,10 @@
         "name": "violatedClause",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
       }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "covenants",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "status",
-        "type": "uint8",
-        "internalType": "enum Covenant.Status"
-      },
-      {
-        "name": "hash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "proposer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "counterparty",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "seatI",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "seatJ",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "earnestAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "bondTotal",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "bondI",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "bondJ",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "lockedAt",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "lockedPly",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "gameId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "seatsRevealed",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -477,19 +407,9 @@
         "internalType": "bytes32"
       },
       {
-        "name": "currentPly",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
         "name": "seat",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "playBalanceHint",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -510,19 +430,9 @@
         "internalType": "bytes32"
       },
       {
-        "name": "currentPly",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
         "name": "seat",
         "type": "uint8",
         "internalType": "uint8"
-      },
-      {
-        "name": "playBalanceHint",
-        "type": "uint256",
-        "internalType": "uint256"
       },
       {
         "name": "bribeAmount",
@@ -596,36 +506,12 @@
   },
   {
     "type": "function",
-    "name": "proposerSeat",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "refundExpiredEarnest",
     "inputs": [
       {
         "name": "covenantHash",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "currentPly",
-        "type": "uint32",
-        "internalType": "uint32"
       }
     ],
     "outputs": [],

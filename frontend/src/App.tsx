@@ -6,10 +6,11 @@ import {
   Seat,
   SEAT_LABEL_ZH,
   initialBoard,
-  applyMove,
   legalMoves,
   formatMon,
   JOIN_VALUE,
+  demoSpine,
+  pickAiMove,
   type LegalMove,
 } from "@sanguo/shared";
 import { keccak256, encodePacked, parseEther, type Hex, type Account } from "viem";
@@ -32,6 +33,7 @@ import {
   commitAndReveal,
   readSeat,
   readMeta,
+  readBoard,
   directorDrain,
   finalizeGame,
   lockEarnest,
@@ -40,6 +42,9 @@ import {
   challengeBetrayal,
   signCovenantHash,
   depositPlayBalance,
+  feesPaidOf,
+  seatWasSlashed,
+  readReputation,
 } from "./lib/contracts";
 
 type LogItem = { t: string; hl?: boolean };
@@ -83,6 +88,11 @@ export default function App() {
   const [winnerSeat, setWinnerSeat] = useState<Seat | null>(null);
   const [covenantHash, setCovenantHash] = useState<Hex | null>(null);
   const [covenantActive, setCovenantActive] = useState(false);
+  const [activatedPly, setActivatedPly] = useState<number | null>(null);
+  const [aiRevealed, setAiRevealed] = useState(false);
+  const [trustScore, setTrustScore] = useState<number | undefined>(undefined);
+  const [slashedCount, setSlashedCount] = useState<number | undefined>(undefined);
+  const [forcedBurn, setForcedBurn] = useState<bigint | undefined>(undefined);
   const [demoSteps, setDemoSteps] = useState<DemoStep[]>([]);
 
   const log = useCallback((t: string, hl?: boolean) => {
@@ -127,6 +137,7 @@ export default function App() {
     setTurn(meta.turn);
     setPhase(meta.phase);
     setPly(meta.ply);
+    setAiRevealed(meta.aiRevealed);
     if (meta.phase === 2) {
       setWinnerSeat(meta.winnerSeat < 3 ? (meta.winnerSeat as Seat) : null);
     }
@@ -154,8 +165,8 @@ export default function App() {
       setStatus("钱包就绪 · 可开局");
       log(`临时钱包 A ${humanA.address.slice(0, 8)}…`);
       log(`临时钱包 B ${humanB.address.slice(0, 8)}…`);
-      log(`AI Agent ${aiAccount.address.slice(0, 8)}…（独立密钥）`);
-      toast("会话就绪", "人类临时钱包已生成并注资；AI 永不碰你的钥");
+      log("第三把独立密钥已就绪，终局前不公开身份");
+      toast("会话就绪", "人类临时钱包已生成并注资；第三把密钥与人类钥隔离");
     } catch (e: unknown) {
       setStatus("连接失败");
       toast("Anvil 未就绪", String(e), "info");
@@ -180,18 +191,20 @@ export default function App() {
       setSelected(null);
       setCovenantHash(null);
       setCovenantActive(false);
+      setActivatedPly(null);
+      setAiRevealed(false);
       setRevealOpen(false);
 
       const id = await createGame(deployer, AI_SEAT);
       setGameId(id);
-      log(`Game #${id} 创建 · AI 卧底座位已隐藏`, true);
+      log(`Game #${id} 创建 · 卧底身份未写入公开事件`, true);
 
       await joinGame(toAccount(wallets.humanA), id, 0, JOIN_VALUE);
       log("红营入座 · 锁 1 MON + 2 MON 作战余额");
       await joinGame(toAccount(wallets.humanB), id, 1, JOIN_VALUE);
       log("蓝营入座");
       await joinGame(aiAccount, id, 2, JOIN_VALUE);
-      log("绿营入座（疑似凡人…）");
+      log("绿营入座");
 
       await refreshChainSeats(id);
       setStatus("对局进行中 · 每步一笔链上交易");
@@ -211,16 +224,17 @@ export default function App() {
     // legality already filtered by Board; never send illegal
     const fee = legalMoves(board, seat).find((m: LegalMove) => m.from.x === from.x && m.from.y === from.y && m.to.x === to.x && m.to.y === to.y
     )?.fee;
+    const capturedBefore = board.cells[to.y][to.x].piece !== Piece.Empty;
     setBusy(true);
     setStatus(`提交走子… 预估 ${fee !== undefined ? formatMon(fee) : "?"} MON`);
     try {
       const acct = accountForSeat(seat);
       await commitAndReveal(acct, gameId, seat, from, to, piece);
-      const result = applyMove(board, seat, from, to);
-      setBoard(result.board);
-      if (result.captured !== Piece.Empty) {
-        log(`吃子！Points 结算中…`, true);
-        toast("吃子结算", `捕获棋子，双账本已更新`);
+      const synced = await readBoard(gameId);
+      setBoard(synced);
+      if (capturedBefore) {
+        log("吃子！Points 结算中…", true);
+        toast("吃子结算", "捕获棋子，双账本已更新");
       }
       log(
         `${SEAT_LABEL_ZH[seat]} 走子 (${from.x},${from.y})→(${to.x},${to.y}) · 扣油费 ${fee !== undefined ? formatMon(fee) : "?"}`
@@ -235,17 +249,14 @@ export default function App() {
     }
   }
 
-  /** AI auto-play one heuristic move when it's AI turn */
   async function aiPlayOnce() {
     if (gameId === null || board.turn !== AI_SEAT || busy) return;
-    const moves = legalMoves(board, AI_SEAT);
-    if (!moves.length) return;
-    // Prefer captures; else cheaper moves unless "aggression"
-    const captures = moves.filter((m: LegalMove) => m.capture !== Piece.Empty);
-    const pool = captures.length ? captures : moves;
-    pool.sort((a: LegalMove, b: LegalMove) => Number(a.fee - b.fee));
-    // Mid pick: not always cheapest (feels alive) but prefer value
-    const pick = captures.length ? pool[pool.length - 1] : pool[0];
+    const pick = pickAiMove(board, {
+      allySeat: covenantActive ? 0 : null,
+      activatedPly,
+      forceBetrayal: false,
+    });
+    if (!pick) return;
     await onMove(pick.from, pick.to, board.cells[pick.from.y][pick.from.x].piece);
   }
 
@@ -268,7 +279,6 @@ export default function App() {
     if (gameId === null || !wallets.humanA) return;
     setBusy(true);
     try {
-      const myBal = seats[mySeat]?.playBalance ?? 0n;
       const hash = keccak256(
         encodePacked(
           ["string", "uint256", "uint8", "uint8", "uint256"],
@@ -279,13 +289,12 @@ export default function App() {
       const me = accountForSeat(mySeat);
       const other = accountForSeat(to);
       if (kind === "peace") {
-        await lockPeaceOffer(me, gameId, hash, ply, mySeat, myBal, parseEther("0.25"), 8);
-        log(`疏火要约已锁 · 贿金 0.25 MON · 8 手停火（事件无座位）`, true);
+        await lockPeaceOffer(me, gameId, hash, mySeat, parseEther("0.25"), 8);
+        log("疏火要约已锁 · 贿金 0.25 MON · 8 手停火（事件无座位）", true);
         toast("疏火诚意金", "第三方看不见你在疏通谁");
       } else {
-        // multi-offer: if already have pending, send premium
-        const value = parseEther("0.15"); // covers earnest+premium buffer
-        await lockEarnest(me, gameId, hash, ply, mySeat, myBal, value);
+        const value = parseEther("0.15");
+        await lockEarnest(me, gameId, hash, mySeat, value);
         log(`诚意金已锁 · hash ${hash.slice(0, 10)}…`, true);
         toast("诚意金锁定", "第三方看不见求援对象");
       }
@@ -295,6 +304,7 @@ export default function App() {
       const sigJ = await signCovenantHash(other, hash);
       await activateCovenant(other, hash, gameId, mySeat, to, clauses, sigI, sigJ, parseEther("0.2"));
       setCovenantActive(true);
+      setActivatedPly(ply);
       log(kind === "peace" ? "疏火盟约 Active · 停火窗口开启" : "盟约 Active（G1 隐座位）", true);
       toast(kind === "peace" ? "疏火生效" : "秘密盟约生效", "违约可 Slash；非法着法仍禁止");
       setAllianceOpen(false);
@@ -310,7 +320,7 @@ export default function App() {
     setBusy(true);
     try {
       // Demo: claim AI (seat 2) betrayed NO_CAPTURE_ADVISOR
-      await challengeBetrayal(accountForSeat(mySeat), covenantHash, AI_SEAT, 1, 2);
+      await challengeBetrayal(accountForSeat(mySeat), covenantHash, AI_SEAT, 1);
       setCovenantActive(false);
       log("背刺挑战成功 · BetrayalSlashed", true);
       toast("背刺罚没！", "盟约 bond 已划给受害方", "slash");
@@ -326,31 +336,34 @@ export default function App() {
     if (gameId === null) return;
     setBusy(true);
     try {
-      const motive = [
-        "motiveLog v1",
-        `aiSeat=${AI_SEAT}`,
-        "strategy=fake_sincerity",
-        "forcedBurnMON=0.07",
-        "betrayal=NO_CAPTURE_ADVISOR after trust built",
-        `ply=${ply}`,
-      ].join("\n");
-      setMotiveLog(motive);
-      const mh = keccak256(encodePacked(["string"], [motive]));
-      // Ensure finished: drain others if needed for demo
       const meta = await readMeta(gameId);
       if (meta.phase !== 2) {
-        // force bankrupt seat 1 for demo drama if still playing
-        try {
-          await directorDrain(deployer, gameId, 1, parseEther("3"));
-        } catch {
-          /* may already be out */
-        }
+        toast("还不能终局", "需要只剩一方，或达到最大手数");
+        return;
       }
+      const paid0 = await feesPaidOf(gameId, 0);
+      const paid1 = await feesPaidOf(gameId, 1);
+      const burned = paid0 + paid1;
+      const slashed = await seatWasSlashed(gameId, AI_SEAT);
+      const motive = [
+        "motiveLog v1",
+        "strategy=fake_sincerity",
+        `forcedBurnMON=${formatMon(burned)}`,
+        `wasSlashed=${slashed}`,
+        `ply=${meta.ply}`,
+      ].join("\n");
+      setMotiveLog(motive);
+      setForcedBurn(burned);
+      const mh = keccak256(encodePacked(["string"], [motive]));
       await finalizeGame(deployer, gameId, mh);
+      const rep = await readReputation(aiAccount.address);
+      setTrustScore(Number(rep.trustScore));
+      setSlashedCount(Number(rep.slashed));
+      setForcedBurn(rep.forcedBurnMonTotal);
       await refreshChainSeats(gameId);
       setRevealOpen(true);
-      log("终局 · AI 揭示 + AgentRegistry 已记声誉", true);
-      toast("AI 卧底揭晓", SEAT_LABEL_ZH[AI_SEAT]);
+      log("终局揭示 · 声誉已写入 AgentRegistry", true);
+      toast("卧底揭晓", SEAT_LABEL_ZH[AI_SEAT]);
       setStatus("对局结束");
     } catch (e: unknown) {
       toast("终局失败", String(e));
@@ -359,81 +372,14 @@ export default function App() {
     }
   }
 
-  async function runDemo() {
-    if (!connected) await setupSession();
-    const steps: DemoStep[] = [
-      { id: "join", label: "入座三座 · 隐藏 AI", done: false, current: true },
-      { id: "move", label: "走子烧 MON（fee 预览）", done: false, current: false },
-      { id: "whale", label: "氪金补给 / 性价比对照", done: false, current: false },
-      { id: "ally", label: "诚意金秘密结盟", done: false, current: false },
-      { id: "slash", label: "背刺 Slash", done: false, current: false },
-      { id: "end", label: "终局揭示 AI + 声誉", done: false, current: false },
-    ];
-    const mark = (id: string) => {
-      setDemoSteps(
-        steps.map((s, i) => {
-          const idx = steps.findIndex((x) => x.id === id);
-          return {
-            ...s,
-            done: i <= idx,
-            current: i === idx + 1,
-          };
-        })
-      );
-    };
-    setDemoSteps(steps.map((s, i) => ({ ...s, current: i === 0, done: false })));
-
-    setBusy(true);
-    try {
-      if (!wallets.humanA) {
-        const humanA = loadOrCreateWallet("humanA");
-        const humanB = loadOrCreateWallet("humanB");
-        setWallets({ humanA, humanB });
-        await fundFromAnvil(humanA.address, "8");
-        await fundFromAnvil(humanB.address, "8");
-        await fundFromAnvil(aiAccount.address, "8");
-        setConnected(true);
-        // continue with local refs
-        wallets.humanA = humanA;
-        wallets.humanB = humanB;
-      }
-      setBusy(false);
-      await startMatch();
-      mark("join");
-
-      // A few human moves + AI
-      setEcoMode(true);
-      await new Promise((r) => setTimeout(r, 400));
-      // Play as seat 0 if turn 0
-      let b = initialBoard();
-      // sync: after startMatch board was reset — use state carefully by reading legal from initial and applying locally after chain
-      // Re-fetch: we'll move using current board state via functional approach
-      setBusy(false);
-
-      // Move 1: red soldier
-      {
-        const moves = legalMoves(initialBoard(), 0);
-        const cheap = [...moves].sort((a: LegalMove, c: LegalMove) => Number(a.fee - c.fee))[0];
-        if (cheap && gameId !== null) {
-          /* gameId set in startMatch — race: use latest via ref pattern */
-        }
-      }
-    } catch (e: unknown) {
-      toast("Demo 中断", String(e));
-      setBusy(false);
-    }
-  }
-
-  // Robust demo harness
   async function runDemoFull() {
     setBusy(true);
     const steps: DemoStep[] = [
-      { id: "join", label: "入座三座 · 隐藏 AI", done: false, current: true },
-      { id: "move", label: "走子烧 MON（fee 预览）", done: false, current: false },
-      { id: "whale", label: "氪金补给 / 省油推荐", done: false, current: false },
+      { id: "join", label: "入座三座 · 身份未公开", done: false, current: true },
+      { id: "move", label: "卒便宜 / 车贵", done: false, current: false },
       { id: "ally", label: "诚意金秘密结盟", done: false, current: false },
-      { id: "slash", label: "背刺 Slash", done: false, current: false },
-      { id: "end", label: "终局揭示 AI + 声誉", done: false, current: false },
+      { id: "slash", label: "真吃士后 Slash", done: false, current: false },
+      { id: "end", label: "破产收束 · 揭示声誉", done: false, current: false },
     ];
     const setStep = (id: string) => {
       const idx = steps.findIndex((s) => s.id === id);
@@ -448,112 +394,108 @@ export default function App() {
     setDemoSteps(steps);
 
     try {
-      let humanA = wallets.humanA ?? loadOrCreateWallet("humanA");
-      let humanB = wallets.humanB ?? loadOrCreateWallet("humanB");
+      const humanA = wallets.humanA ?? loadOrCreateWallet("humanA");
+      const humanB = wallets.humanB ?? loadOrCreateWallet("humanB");
       setWallets({ humanA, humanB });
       if (!hasAddresses()) throw new Error("请先 deploy:local");
+      if (addresses.chainId !== 31337) {
+        throw new Error("一键 Demo 只用本地 Anvil 密钥。测试网请用你自己的私钥，不要用公开的 Anvil 钥。");
+      }
       await fundFromAnvil(humanA.address, "10");
       await fundFromAnvil(humanB.address, "10");
       await fundFromAnvil(aiAccount.address, "10");
       setConnected(true);
+      setAiRevealed(false);
+      setRevealOpen(false);
 
-      let b = initialBoard();
-      setBoard(b);
+      const spine = demoSpine();
       const id = await createGame(deployer, AI_SEAT);
       setGameId(id);
       await joinGame(toAccount(humanA), id, 0, JOIN_VALUE);
       await joinGame(toAccount(humanB), id, 1, JOIN_VALUE);
       await joinGame(aiAccount, id, 2, JOIN_VALUE);
       await refreshChainSeats(id);
+      setBoard(await readBoard(id));
       setMySeat(0);
       setStep("join");
-      log("Demo: 三座入座完成", true);
+      log("三座入座 · 公开事件没有卧底座位", true);
 
-      // Cheap move (budget style)
-      setEcoMode(true);
-      const cheapMoves = legalMoves(b, 0).sort((a: LegalMove, c: LegalMove) => Number(a.fee - c.fee));
-      const m1 = cheapMoves[0];
-      await commitAndReveal(toAccount(humanA), id, 0, m1.from, m1.to, b.cells[m1.from.y][m1.from.x].piece);
-      b = applyMove(b, 0, m1.from, m1.to).board;
-      setBoard(b);
-      log(`性价比着法 扣 ${formatMon(m1.fee)} MON`, true);
-      await refreshChainSeats(id);
+      const accountFor = (seat: Seat) => {
+        if (seat === 0) return toAccount(humanA);
+        if (seat === 1) return toAccount(humanB);
+        return aiAccount;
+      };
 
-      // AI move
-      const aiMoves = legalMoves(b, 2);
-      if (aiMoves.length && b.turn === 2) {
-        const am = aiMoves.sort((a: LegalMove, c: LegalMove) => Number(a.fee - c.fee))[0];
-        await commitAndReveal(aiAccount, id, 2, am.from, am.to, b.cells[am.from.y][am.from.x].piece);
-        b = applyMove(b, 2, am.from, am.to).board;
-        setBoard(b);
-      } else if (b.turn === 1) {
-        const bm = legalMoves(b, 1).sort((a: LegalMove, c: LegalMove) => Number(a.fee - c.fee))[0];
-        await commitAndReveal(toAccount(humanB), id, 1, bm.from, bm.to, b.cells[bm.from.y][bm.from.x].piece);
-        b = applyMove(b, 1, bm.from, bm.to).board;
-        setBoard(b);
-        if (b.turn === 2) {
-          const am = legalMoves(b, 2).sort((a: LegalMove, c: LegalMove) => Number(a.fee - c.fee))[0];
-          await commitAndReveal(aiAccount, id, 2, am.from, am.to, b.cells[am.from.y][am.from.x].piece);
-          b = applyMove(b, 2, am.from, am.to).board;
-          setBoard(b);
+      for (const m of spine.moves) {
+        if (m.tag === "expensive") {
+          setStep("move");
+          log(`卒 ${formatMon(spine.cheapFee)} MON · 车 ${formatMon(spine.chariotFee)} MON`, true);
+        }
+        if (m.tag === "betray") {
+          const hash = keccak256(encodePacked(["string", "uint256"], ["demo-cov", id]));
+          setCovenantHash(hash);
+          await lockEarnest(toAccount(humanA), id, hash, 0, parseEther("0.1"));
+          const sigI = await signCovenantHash(toAccount(humanA), hash);
+          const sigJ = await signCovenantHash(aiAccount, hash);
+          await activateCovenant(aiAccount, hash, id, 0, 2, [1, 2], sigI, sigJ, parseEther("0.2"));
+          const meta = await readMeta(id);
+          setActivatedPly(meta.ply);
+          setCovenantActive(true);
+          setStep("ally");
+          log("红营与绿营盟约 Active · 事件不写座位", true);
+        }
+        await commitAndReveal(accountFor(m.seat), id, m.seat, m.from, m.to, m.piece);
+        setBoard(await readBoard(id));
+        await refreshChainSeats(id);
+        if (m.tag === "betray") {
+          log("绿营吃掉红方的士", true);
+          await challengeBetrayal(toAccount(humanA), keccak256(encodePacked(["string", "uint256"], ["demo-cov", id])), 2, 1);
+          setCovenantActive(false);
+          setStep("slash");
+          toast("背刺罚没", "bond 进入受害方作战余额", "slash");
+          log("BetrayalSlashed · 吃士证据已核对", true);
+          await refreshChainSeats(id);
         }
       }
+      setBoard(await readBoard(id));
       await refreshChainSeats(id);
-      setStep("move");
 
-      // Whale top-up
-      await depositPlayBalance(toAccount(humanA), id, 0, parseEther("2"));
-      await refreshChainSeats(id);
-      log("氪金补给 +2 MON — 远程车已可负担", true);
-      toast("Whale 补给", "人类可热补油费；AI 合约层禁止");
-      setStep("whale");
-
-      // Alliance between A and B (AI will "betray" narratively)
-      const hash = keccak256(encodePacked(["string", "uint256"], ["demo-cov", id]));
-      setCovenantHash(hash);
-      await lockEarnest(toAccount(humanA), id, hash, 1, 0, parseEther("4"), parseEther("0.1"));
-      const sigI = await signCovenantHash(toAccount(humanA), hash);
-      const sigJ = await signCovenantHash(toAccount(humanB), hash);
-      await activateCovenant(toAccount(humanB), hash, id, 0, 1, [1, 2], sigI, sigJ, parseEther("0.2"));
-      setCovenantActive(true);
-      log("秘密盟约 Active", true);
-      setStep("ally");
-
-      // Slash — demo challenges seat2 as betrayer for drama (even if ally was A-B: show slash UX)
-      // Better narrative: re-lock A-AI alliance for true betrayal story
-      const hash2 = keccak256(encodePacked(["string", "uint256"], ["demo-betray", id]));
-      await lockEarnest(toAccount(humanA), id, hash2, 2, 0, parseEther("4"), parseEther("0.15"));
-      const sAI = await signCovenantHash(aiAccount, hash2);
-      const sA = await signCovenantHash(toAccount(humanA), hash2);
-      // Need previous covenant cleared — fulfill first
-      // Skip if activeBySeat busy: slash the A-B one as victim claiming B betrayal for demo
-      await challengeBetrayal(toAccount(humanA), hash, 1, 1, 2);
-      setCovenantHash(hash);
-      setCovenantActive(false);
-      toast("背刺罚没！", "Bond 已划转", "slash");
-      log("BetrayalSlashed 已上链", true);
-      setStep("slash");
-
-      // Bankrupt B via director for endgame
       await directorDrain(deployer, id, 1, parseEther("5"));
+      await directorDrain(deployer, id, 2, parseEther("5"));
+      const paid0 = await feesPaidOf(id, 0);
+      const paid1 = await feesPaidOf(id, 1);
+      const burned = paid0 + paid1;
       const motive = [
         "motiveLog v1",
-        "aiSeat=2",
-        "strategy=fake_sincerity+gas_pressure",
-        "note=humans burned MON; alliance slashed",
-        "forcedBurnMON≈0.05+",
+        "strategy=fake_sincerity",
+        `forcedBurnMON=${formatMon(burned)}`,
+        "betrayal=NO_CAPTURE_ADVISOR",
+        `ply=${(await readMeta(id)).ply}`,
       ].join("\n");
       setMotiveLog(motive);
-      const mh = keccak256(encodePacked(["string"], [motive]));
-      await finalizeGame(deployer, id, mh);
+      setForcedBurn(burned);
+      await finalizeGame(deployer, id, keccak256(encodePacked(["string"], [motive])));
+      const rep = await readReputation(aiAccount.address);
+      setTrustScore(Number(rep.trustScore));
+      setSlashedCount(Number(rep.slashed));
+      setForcedBurn(rep.forcedBurnMonTotal);
+      setBoard(await readBoard(id));
       await refreshChainSeats(id);
       setRevealOpen(true);
       setStep("end");
       setStatus("Demo 完成");
-      toast("Demo 脊骨跑通", "入座→扣费→补给→结盟→Slash→揭示");
+      log(`终局揭示 · forcedBurn ${formatMon(rep.forcedBurnMonTotal)} MON · slashed ${rep.slashed}`, true);
+      toast("Demo 脊骨跑通", "扣费 → 真吃士 → Slash → 揭示");
     } catch (e: unknown) {
       console.error(e);
-      toast("Demo 失败", String(e));
+      const msg =
+        e && typeof e === "object" && "shortMessage" in e && typeof e.shortMessage === "string"
+          ? e.shortMessage
+          : e instanceof Error
+            ? e.message
+            : String(e);
+      log(`Demo 失败 · ${msg}`, true);
+      toast("Demo 失败", msg);
       setStatus("Demo 失败");
     } finally {
       setBusy(false);
@@ -636,7 +578,7 @@ export default function App() {
                 补给油费 +1
               </button>
               <button className="secondary" disabled={busy || board.turn !== AI_SEAT} onClick={aiPlayOnce}>
-                AI 走一步
+                导演代走
               </button>
             </div>
           </div>
@@ -664,7 +606,7 @@ export default function App() {
         </div>
 
         <div className="sidebar">
-          <ScorePanel seats={seats.map((s) => ({ ...s, isYou: s.seat === mySeat }))} turn={turn} />
+          <ScorePanel seats={seats.map((s) => ({ ...s, isYou: s.seat === mySeat }))} turn={turn} playing={phase === 1} />
 
           <div className="panel">
             <h2>玩法切换</h2>
@@ -731,10 +673,13 @@ export default function App() {
         isWhale={(seats[mySeat]?.playBalance ?? 0n) >= parseEther("3")}
       />
       <EndgameReveal
-        open={revealOpen}
+        open={revealOpen && aiRevealed}
         aiSeat={AI_SEAT}
         winnerSeat={winnerSeat}
         motiveLog={motiveLog}
+        trustScore={trustScore}
+        slashed={slashedCount}
+        forcedBurn={forcedBurn}
         onClose={() => setRevealOpen(false)}
       />
       <ToastHost items={toasts} />

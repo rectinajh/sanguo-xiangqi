@@ -17,6 +17,7 @@ contract Deploy is Script {
         registry.setGameTable(address(table));
         Covenant covenant = new Covenant(address(verifier));
         covenant.setGameTable(address(table));
+        table.setCovenant(address(covenant));
         vm.stopBroadcast();
 
         console2.log("StubVerifier", address(verifier));

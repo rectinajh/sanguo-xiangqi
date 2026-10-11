@@ -9,6 +9,7 @@ import {
 import gameAbi from "../abi/GameTable.json";
 import covAbi from "../abi/Covenant.json";
 import regAbi from "../abi/AgentRegistry.json";
+import { BOARD_H, BOARD_W, Piece, type BoardState, type Seat } from "@sanguo/shared";
 import { addresses, getPublicClient, getWalletClient } from "./chain";
 
 export const gameTableAbi = gameAbi as any;
@@ -154,6 +155,105 @@ export async function readSeat(gameId: bigint, seat: number) {
   };
 }
 
+export async function readBoard(gameId: bigint): Promise<BoardState> {
+  const pub = getPublicClient();
+  const contracts = [];
+  for (let y = 0; y < BOARD_H; y++) {
+    for (let x = 0; x < BOARD_W; x++) {
+      contracts.push({
+        address: gameAddress(),
+        abi: gameTableAbi,
+        functionName: "cell" as const,
+        args: [gameId, x, y] as const,
+      });
+    }
+  }
+  // Fresh Anvil has no Multicall3. Read each cell directly.
+  const packed = await Promise.all(
+    contracts.map(
+      (c) =>
+        pub.readContract({
+          address: c.address,
+          abi: c.abi,
+          functionName: "cell",
+          args: c.args,
+        }) as Promise<readonly [number, number]>
+    )
+  );
+  const meta = await readMeta(gameId);
+  const seatViews = await Promise.all([0, 1, 2].map((s) => readSeat(gameId, s)));
+  const cells: BoardState["cells"] = [];
+  for (let y = 0; y < BOARD_H; y++) {
+    const row = [];
+    for (let x = 0; x < BOARD_W; x++) {
+      const [piece, seatOr255] = packed[y * BOARD_W + x];
+      row.push({
+        piece: piece as Piece,
+        seat: seatOr255 === 255 ? null : (seatOr255 as Seat),
+      });
+    }
+    cells.push(row);
+  }
+  return {
+    cells,
+    turn: meta.turn,
+    eliminated: seatViews.map((s) => s.eliminated),
+    ply: meta.ply,
+  };
+}
+
+export async function feesPaidOf(gameId: bigint, seat: number) {
+  const pub = getPublicClient();
+  return (await pub.readContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "feesPaidOf",
+    args: [gameId, seat],
+  })) as bigint;
+}
+
+export async function seatWasSlashed(gameId: bigint, seat: number) {
+  const pub = getPublicClient();
+  return (await pub.readContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "seatWasSlashed",
+    args: [gameId, seat],
+  })) as boolean;
+}
+
+export async function readReputation(agent: `0x${string}`) {
+  const pub = getPublicClient();
+  const raw = await pub.readContract({
+    address: registryAddress(),
+    abi: registryAbi,
+    functionName: "getReputation",
+    args: [agent],
+  });
+  const r = raw as {
+    games: number;
+    wins: number;
+    slashed: number;
+    betrayalIndex: number;
+    trustScore: number;
+    forcedBurnMonTotal: bigint;
+    registered: boolean;
+    metadataURI: string;
+  } & readonly [number, number, number, number, number, bigint, boolean, string];
+  if (r && typeof r === "object" && "trustScore" in r) return r;
+  const tuple = raw as readonly [number, number, number, number, number, bigint, boolean, string];
+  return {
+    games: tuple[0],
+    wins: tuple[1],
+    slashed: tuple[2],
+    betrayalIndex: tuple[3],
+    trustScore: tuple[4],
+    forcedBurnMonTotal: tuple[5],
+    registered: tuple[6],
+    metadataURI: tuple[7],
+  };
+}
+
 export async function readMeta(gameId: bigint) {
   const pub = getPublicClient();
   const r = (await pub.readContract({
@@ -205,9 +305,7 @@ export async function lockEarnest(
   account: Account,
   gameId: bigint,
   covenantHash: Hex,
-  ply: number,
   seat: number,
-  playBalanceHint: bigint,
   value: bigint = parseEther("0.1")
 ) {
   const wallet = getWalletClient(account);
@@ -216,7 +314,7 @@ export async function lockEarnest(
     address: covenantAddress(),
     abi: covenantAbi,
     functionName: "lockEarnest",
-    args: [gameId, covenantHash, ply, seat, playBalanceHint],
+    args: [gameId, covenantHash, seat],
     value,
     account,
     chain: wallet.chain,
@@ -229,22 +327,18 @@ export async function lockPeaceOffer(
   account: Account,
   gameId: bigint,
   covenantHash: Hex,
-  ply: number,
   seat: number,
-  playBalanceHint: bigint,
   bribeAmount: bigint,
   plies: number
 ) {
   const wallet = getWalletClient(account);
   const pub = getPublicClient();
-  // earnest 0.1 + optional premium 0.05 + bribe
-  // Include 0.05 buffer so multi-offer premium never reverts
   const value = parseEther("0.1") + parseEther("0.05") + bribeAmount;
   const hash = await wallet.writeContract({
     address: covenantAddress(),
     abi: covenantAbi,
     functionName: "lockPeaceOffer",
-    args: [gameId, covenantHash, ply, seat, playBalanceHint, bribeAmount, plies],
+    args: [gameId, covenantHash, seat, bribeAmount, plies],
     value,
     account,
     chain: wallet.chain,
@@ -283,8 +377,7 @@ export async function challengeBetrayal(
   account: Account,
   covenantHash: Hex,
   betrayerSeat: number,
-  clause: number,
-  piece: number
+  clause: number
 ) {
   const wallet = getWalletClient(account);
   const pub = getPublicClient();
@@ -292,7 +385,7 @@ export async function challengeBetrayal(
     address: covenantAddress(),
     abi: covenantAbi,
     functionName: "challengeBetrayal",
-    args: [covenantHash, betrayerSeat, clause, piece],
+    args: [covenantHash, betrayerSeat, clause],
     account,
     chain: wallet.chain,
   });

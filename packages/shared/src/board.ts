@@ -61,7 +61,8 @@ export function initialBoard(): BoardState {
   put(b, 10, 0, Piece.General, 2);
   put(b, 9, 0, Piece.Advisor, 2);
   put(b, 10, 1, Piece.Elephant, 2);
-  put(b, 8, 0, Piece.Horse, 2);
+  // Closer to seat 0's advisor so a real betrayal capture is a few legal moves away.
+  put(b, 6, 9, Piece.Horse, 2);
   put(b, 10, 2, Piece.Chariot, 2);
   put(b, 8, 2, Piece.Cannon, 2);
   put(b, 7, 1, Piece.Soldier, 2);

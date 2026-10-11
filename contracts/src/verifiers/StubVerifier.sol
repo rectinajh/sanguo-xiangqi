@@ -9,11 +9,9 @@ import {IVerifier} from "../interfaces/IVerifier.sol";
 contract StubVerifier is IVerifier {
     /// @dev Accepts empty proof (ECDSA path already done in Covenant).
     /// Rejects a magic "fake zk" marker to avoid empty return-true abuse in tests of honesty.
+    /// @dev Empty proof = P0 ECDSA path (signatures checked in Covenant).
+    /// Any non-empty blob is rejected until a real preimage verifier exists.
     function verifyCovenantProof(bytes32, bytes calldata zkProof) external pure returns (bool) {
-        if (zkProof.length == 0) return true; // P0 ECDSA path
-        // Reject claimed-fake full ZK blobs that start with "FAKEZK"
-        if (zkProof.length >= 6 && bytes6(zkProof[0:6]) == bytes6("FAKEZK")) return false;
-        // Future: decode real proof; for now non-empty non-fake is accepted as opaque blob passthrough
-        return true;
+        return zkProof.length == 0;
     }
 }

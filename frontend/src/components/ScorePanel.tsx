@@ -13,9 +13,10 @@ export type SeatView = {
 type Props = {
   seats: SeatView[];
   turn: Seat;
+  playing: boolean;
 };
 
-export function ScorePanel({ seats, turn }: Props) {
+export function ScorePanel({ seats, turn, playing }: Props) {
   return (
     <div className="panel">
       <h2>双账本</h2>
@@ -29,7 +30,7 @@ export function ScorePanel({ seats, turn }: Props) {
               <span className="dot" style={{ background: SEAT_COLOR[s.seat] }} />
               {SEAT_LABEL_ZH[s.seat]}
               {s.isYou ? " · 你" : ""}
-              {s.eliminated ? " · 出局" : turn === s.seat ? " · 行棋中" : ""}
+              {s.eliminated ? " · 出局" : playing && turn === s.seat ? " · 行棋中" : ""}
             </span>
             <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
               {s.address ? `${s.address.slice(0, 6)}…${s.address.slice(-4)}` : "未入座"}

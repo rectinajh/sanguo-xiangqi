@@ -2,3 +2,7 @@ export * from "./constants.js";
 export * from "./pieces.js";
 export * from "./fees.js";
 export * from "./board.js";
+export * from "./policy.js";
+export * from "./demoSpine.js";
+export * from "./sanrenMap.js";
+export * from "./sanrenSetup.js";
