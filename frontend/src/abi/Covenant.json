@@ -146,6 +146,32 @@
   },
   {
     "type": "function",
+    "name": "FULFILL_COOLDOWN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_CLAUSES",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "WHALE_PENDING_EARNEST",
     "inputs": [],
     "outputs": [
@@ -175,29 +201,56 @@
     "name": "activateCovenant",
     "inputs": [
       {
-        "name": "covenantHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "gameId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "seatI",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "seatJ",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "clauses",
-        "type": "uint8[]",
-        "internalType": "uint8[]"
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct Covenant.CovenantPreimage",
+        "components": [
+          {
+            "name": "gameId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "seatI",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "seatJ",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "clauses",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "earnestBond",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "validFromPly",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "validToPly",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
       },
       {
         "name": "sigI",
@@ -233,30 +286,6 @@
         "name": "",
         "type": "uint32",
         "internalType": "uint32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "activeBySeat",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -302,6 +331,25 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "clausesOf",
+    "inputs": [
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8[]",
+        "internalType": "uint8[]"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -394,6 +442,96 @@
   },
   {
     "type": "function",
+    "name": "hasActive",
+    "inputs": [
+      {
+        "name": "gameId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "seat",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hashPreimage",
+    "inputs": [
+      {
+        "name": "p",
+        "type": "tuple",
+        "internalType": "struct Covenant.CovenantPreimage",
+        "components": [
+          {
+            "name": "gameId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "seatI",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "seatJ",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "clauses",
+            "type": "uint8[]",
+            "internalType": "uint8[]"
+          },
+          {
+            "name": "bondAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "earnestBond",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "nonce",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "validFromPly",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "validToPly",
+            "type": "uint32",
+            "internalType": "uint32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "lockEarnest",
     "inputs": [
       {
@@ -463,6 +601,54 @@
   },
   {
     "type": "function",
+    "name": "partiesOf",
+    "inputs": [
+      {
+        "name": "gameId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "seat",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "covenantHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "partiesOfHash",
+    "inputs": [
+      {
+        "name": "hash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "proposer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "counterparty",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "peacePlies",
     "inputs": [
       {
@@ -482,15 +668,15 @@
   },
   {
     "type": "function",
-    "name": "pendingCountBySeat",
+    "name": "pendingCount",
     "inputs": [
       {
-        "name": "",
+        "name": "gameId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "seat",
         "type": "uint8",
         "internalType": "uint8"
       }
@@ -614,6 +800,12 @@
         "type": "bytes32",
         "indexed": true,
         "internalType": "bytes32"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -658,6 +850,12 @@
         "type": "bytes32",
         "indexed": true,
         "internalType": "bytes32"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false

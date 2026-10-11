@@ -11,7 +11,6 @@ import covAbi from "../abi/Covenant.json";
 import regAbi from "../abi/AgentRegistry.json";
 import { BOARD_H, BOARD_W, Piece, type BoardState, type Seat } from "@sanguo/shared";
 import { addresses, getPublicClient, getWalletClient } from "./chain";
-
 export const gameTableAbi = gameAbi as any;
 export const covenantAbi = covAbi as any;
 export const registryAbi = regAbi as any;
@@ -27,7 +26,121 @@ export function registryAddress() {
 }
 
 export function hasAddresses() {
-  return Boolean(addresses.GameTable && addresses.Covenant);
+  // 三个地址缺一不可：finalizeGame 会调用 AgentRegistry.recordGameResult，
+  // 少了它会让整笔结算 revert，所有质押都会被锁死。
+  return Boolean(addresses.GameTable && addresses.Covenant && addresses.AgentRegistry);
+}
+
+// ── 盟约 preimage ────────────────────────────────────────────────
+// 链上 Covenant.hashPreimage(p) = keccak256(abi.encode(p))，字段顺序必须一致。
+// 链下先用 nonce=0 算出哈希（用于锁诚意金与让双方签名），再把该哈希写回
+// nonce 字段 —— 链上按同样的规则重建即可得到同一个 covenantHash。
+export type CovenantPreimage = {
+  gameId: bigint;
+  seatI: number;
+  seatJ: number;
+  clauses: number[];
+  bondAmount: bigint;
+  earnestBond: bigint;
+  nonce: Hex;
+  validFromPly: number;
+  validToPly: number;
+};
+
+// 必须与链上 Covenant.hashPreimage(p) = keccak256(abi.encode(p)) 完全一致。
+// ⚠️ abi.encode(单个结构体) 等价于 encodeAbiParameters([tuple], [p])，
+//    也就是【外面还要再套一层 tuple】。直接扁平展开参数会得到另一串字节
+//    （实测 770 vs 正确 834 hex 字符），从而算出不同的 covenantHash，
+//    表现为 activateCovenant revert("pending")。这条由
+//    contracts/test/Preimage.t.sol 的跨语言哈希对照测试钉死。
+const PREIMAGE_TUPLE_ABI = [
+  {
+    type: "tuple",
+    components: [
+      { name: "gameId", type: "uint256" },
+      { name: "seatI", type: "uint8" },
+      { name: "seatJ", type: "uint8" },
+      { name: "clauses", type: "uint8[]" },
+      { name: "bondAmount", type: "uint256" },
+      { name: "earnestBond", type: "uint256" },
+      { name: "nonce", type: "bytes32" },
+      { name: "validFromPly", type: "uint32" },
+      { name: "validToPly", type: "uint32" },
+    ],
+  },
+] as const;
+
+export function encodePreimage(p: CovenantPreimage): Hex {
+  return encodeAbiParameters(PREIMAGE_TUPLE_ABI, [
+    {
+      gameId: p.gameId,
+      seatI: p.seatI,
+      seatJ: p.seatJ,
+      clauses: p.clauses,
+      bondAmount: p.bondAmount,
+      earnestBond: p.earnestBond,
+      nonce: p.nonce,
+      validFromPly: p.validFromPly,
+      validToPly: p.validToPly,
+    },
+  ]);
+}
+
+function preimageFromTuple(t: readonly [
+  bigint,
+  number,
+  number,
+  readonly number[],
+  bigint,
+  bigint,
+  Hex,
+  number,
+  number,
+]): CovenantPreimage {
+  return {
+    gameId: t[0],
+    seatI: Number(t[1]),
+    seatJ: Number(t[2]),
+    clauses: [...t[3]],
+    bondAmount: t[4],
+    earnestBond: t[5],
+    nonce: t[6],
+    validFromPly: Number(t[7]),
+    validToPly: Number(t[8]),
+  };
+}
+
+/** 构造 preimage 并算出 covenantHash（nonce 已写回）。 */
+export function buildPreimage(args: {
+  gameId: bigint;
+  seatI: number;
+  seatJ: number;
+  clauses: number[];
+  bondAmount: bigint;
+  earnestBond?: bigint;
+  validFromPly?: number;
+  validToPly?: number;
+}): { preimage: CovenantPreimage; hash: Hex } {
+  const zero = `0x${"00".repeat(32)}` as Hex;
+  const base: CovenantPreimage = {
+    gameId: args.gameId,
+    seatI: args.seatI,
+    seatJ: args.seatJ,
+    clauses: args.clauses,
+    bondAmount: args.bondAmount,
+    earnestBond: args.earnestBond ?? parseEther("0.1"),
+    nonce: zero,
+    validFromPly: args.validFromPly ?? 0,
+    validToPly: args.validToPly ?? 80,
+  };
+  const h0 = keccak256(encodePreimage(base));
+  const preimage = { ...base, nonce: h0 };
+  return { preimage, hash: keccak256(encodePreimage(preimage)) };
+}
+
+/** activateCovenant 需要 calldata 形态的 preimage（数组要可变）。 */
+function toCalldata(p: CovenantPreimage) {
+  return [p.gameId, p.seatI, p.seatJ, p.clauses, p.bondAmount, p.earnestBond, p.nonce, p.validFromPly, p.validToPly] as const;
 }
 
 export function moveCommitHash(
@@ -349,11 +462,7 @@ export async function lockPeaceOffer(
 
 export async function activateCovenant(
   account: Account,
-  covenantHash: Hex,
-  gameId: bigint,
-  seatI: number,
-  seatJ: number,
-  clauses: number[],
+  preimage: CovenantPreimage,
   sigI: Hex,
   sigJ: Hex,
   value: bigint
@@ -364,8 +473,109 @@ export async function activateCovenant(
     address: covenantAddress(),
     abi: covenantAbi,
     functionName: "activateCovenant",
-    args: [covenantHash, gameId, seatI, seatJ, clauses, sigI, sigJ, "0x"],
+    args: [toCalldata(preimage), sigI, sigJ, "0x"],
     value,
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/** 激活一个盟约还差多少钱（当前调用者视角）。 */
+export async function outstandingBondFor(preimage: CovenantPreimage, caller: `0x${string}`) {
+  const pub = getPublicClient();
+  const [proposer] = (await pub.readContract({
+    address: covenantAddress(),
+    abi: covenantAbi,
+    functionName: "partiesOfHash",
+    args: [keccak256(encodePreimage(preimage))],
+    account: caller,
+  })) as readonly [string, string];
+  const each = preimage.bondAmount / 2n;
+  const proposerOwed = each > preimage.earnestBond ? each - preimage.earnestBond : 0n;
+  return caller.toLowerCase() === proposer.toLowerCase() ? proposerOwed : proposerOwed + each;
+}
+
+/** 当事人自查：我这个座位有没有生效盟约（第三方读不到）。 */
+export async function partiesOfHash(hash: Hex, caller: `0x${string}`) {
+  const pub = getPublicClient();
+  return (await pub.readContract({
+    address: covenantAddress(),
+    abi: covenantAbi,
+    functionName: "partiesOfHash",
+    args: [hash],
+    account: caller,
+  })) as readonly [string, string];
+}
+
+export async function hasActive(gameId: bigint, seat: number) {
+  const pub = getPublicClient();
+  return (await pub.readContract({
+    address: covenantAddress(),
+    abi: covenantAbi,
+    functionName: "hasActive",
+    args: [gameId, seat],
+  })) as boolean;
+}
+
+export async function clausesOf(hash: Hex): Promise<number[]> {
+  const pub = getPublicClient();
+  const raw = (await pub.readContract({
+    address: covenantAddress(),
+    abi: covenantAbi,
+    functionName: "clausesOf",
+    args: [hash],
+  })) as readonly number[];
+  return raw.map(Number);
+}
+
+export async function activatedPlyOf(hash: Hex) {
+  const pub = getPublicClient();
+  return Number(
+    (await pub.readContract({
+      address: covenantAddress(),
+      abi: covenantAbi,
+      functionName: "activatedPlyOf",
+      args: [hash],
+    })) as number
+  );
+}
+
+export async function withdrawTreasury(account: Account, gameId: bigint, to: `0x${string}`, amount: bigint) {
+  const wallet = getWalletClient(account);
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "withdrawTreasury",
+    args: [gameId, to, amount],
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+export async function protocolTreasuryOf(gameId: bigint) {
+  const pub = getPublicClient();
+  return (await pub.readContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "protocolTreasuryOf",
+    args: [gameId],
+  })) as bigint;
+}
+
+/** AI 座位注册声誉身份；只有注册过的地址才写得进战绩。 */
+export async function registerAgent(account: Account, metadataURI: string) {
+  const wallet = getWalletClient(account);
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: registryAddress(),
+    abi: registryAbi,
+    functionName: "registerAgent",
+    args: [metadataURI],
     account,
     chain: wallet.chain,
   });

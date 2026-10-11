@@ -45,12 +45,41 @@ import {
   feesPaidOf,
   seatWasSlashed,
   readReputation,
+  buildPreimage,
+  registerAgent,
+  clausesOf,
 } from "./lib/contracts";
 
 type LogItem = { t: string; hl?: boolean };
 type DemoStep = { id: string; label: string; done: boolean; current: boolean };
 
 const AI_SEAT: Seat = 2;
+// 链上条款编号，必须与 Covenant.sol 的常量一致
+const CLAUSE_NO_CAPTURE_ADVISOR = 1;
+const CLAUSE_NO_EXPOSE = 2;
+const CLAUSE_BUY_PEACE = 4;
+const BOND_PER_CLAUSE = parseEther("0.15");
+
+/**
+ * viem 的错误对象直接 String() 会渲染成 "[object Object]"。
+ * 这里按优先级取出人类可读的 revert 原因。
+ */
+function friendlyError(e: unknown): string {
+  if (e && typeof e === "object") {
+    const anyE = e as Record<string, unknown>;
+    if (typeof anyE.shortMessage === "string") return anyE.shortMessage;
+    if (typeof anyE.details === "string") return anyE.details;
+    if (typeof anyE.message === "string") {
+      const m = anyE.message as string;
+      // 合约 revert 的 reason 常藏在 message 里
+      const match = m.match(/reverted with the following reason:\s*([^\n]+)/);
+      if (match) return match[1].trim();
+      return m.split("\n")[0];
+    }
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
 
 export default function App() {
   const [connected, setConnected] = useState(false);
@@ -88,6 +117,9 @@ export default function App() {
   const [winnerSeat, setWinnerSeat] = useState<Seat | null>(null);
   const [covenantHash, setCovenantHash] = useState<Hex | null>(null);
   const [covenantActive, setCovenantActive] = useState(false);
+  // 盟约里"可能违约的那一方"的座位。Demo 主线是 AI（座位 2）；
+  // 人类互盟时会被 proposeAlliance 设为对手座位。
+  const [covenantBetrayer, setCovenantBetrayer] = useState<Seat>(AI_SEAT);
   const [activatedPly, setActivatedPly] = useState<number | null>(null);
   const [aiRevealed, setAiRevealed] = useState(false);
   const [trustScore, setTrustScore] = useState<number | undefined>(undefined);
@@ -279,37 +311,51 @@ export default function App() {
     if (gameId === null || !wallets.humanA) return;
     setBusy(true);
     try {
-      const hash = keccak256(
-        encodePacked(
-          ["string", "uint256", "uint8", "uint8", "uint256"],
-          [kind === "peace" ? "peace" : "covenant", gameId, mySeat, to, BigInt(Date.now())]
-        )
-      );
+      // 条款与 bond 现在都进入被签名的 preimage：链上会校验
+      // keccak256(abi.encode(preimage)) == covenantHash，调用者无法再现场改条款。
+      const clauses = kind === "peace" ? [CLAUSE_BUY_PEACE, CLAUSE_NO_CAPTURE_ADVISOR] : [CLAUSE_NO_CAPTURE_ADVISOR, CLAUSE_NO_EXPOSE];
+      const bondAmount = BOND_PER_CLAUSE * BigInt(clauses.length);
+      const { preimage, hash } = buildPreimage({
+        gameId,
+        seatI: mySeat,
+        seatJ: to,
+        clauses,
+        bondAmount,
+      });
       setCovenantHash(hash);
+      setCovenantBetrayer(to);
       const me = accountForSeat(mySeat);
       const other = accountForSeat(to);
+
+      // 发起方锁诚意金（0.1）；激活时按身份各自补足自己那一半 bond。
+      const earnest = preimage.earnestBond;
       if (kind === "peace") {
         await lockPeaceOffer(me, gameId, hash, mySeat, parseEther("0.25"), 8);
         log("疏火要约已锁 · 贿金 0.25 MON · 8 手停火（事件无座位）", true);
         toast("疏火诚意金", "第三方看不见你在疏通谁");
       } else {
-        const value = parseEther("0.15");
-        await lockEarnest(me, gameId, hash, mySeat, value);
+        await lockEarnest(me, gameId, hash, mySeat, earnest);
         log(`诚意金已锁 · hash ${hash.slice(0, 10)}…`, true);
         toast("诚意金锁定", "第三方看不见求援对象");
       }
 
-      const clauses = kind === "peace" ? [4, 1] : [1, 2];
+      // 双方对同一个 covenantHash 签名 —— 签的就是上面那份条款。
       const sigI = await signCovenantHash(me, hash);
       const sigJ = await signCovenantHash(other, hash);
-      await activateCovenant(other, hash, gameId, mySeat, to, clauses, sigI, sigJ, parseEther("0.2"));
+
+      // 由对手方激活：它付自己那一半 + 替发起方补齐缺口（发起方已锁的
+      // 诚意金抵扣了自己那一半）。链上按身份计费，不再看谁在调用。
+      const each = bondAmount / 2n;
+      const proposerOwed = each > earnest ? each - earnest : 0n;
+      const value = proposerOwed + each;
+      await activateCovenant(other, preimage, sigI, sigJ, value);
       setCovenantActive(true);
       setActivatedPly(ply);
       log(kind === "peace" ? "疏火盟约 Active · 停火窗口开启" : "盟约 Active（G1 隐座位）", true);
       toast(kind === "peace" ? "疏火生效" : "秘密盟约生效", "违约可 Slash；非法着法仍禁止");
       setAllianceOpen(false);
     } catch (e: unknown) {
-      toast("盟约失败", String(e));
+      toast("盟约失败", friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -319,16 +365,49 @@ export default function App() {
     if (gameId === null || !covenantHash) return;
     setBusy(true);
     try {
-      // Demo: claim AI (seat 2) betrayed NO_CAPTURE_ADVISOR
-      await challengeBetrayal(accountForSeat(mySeat), covenantHash, AI_SEAT, 1);
-      setCovenantActive(false);
-      log("背刺挑战成功 · BetrayalSlashed", true);
-      toast("背刺罚没！", "盟约 bond 已划给受害方", "slash");
-      await refreshChainSeats(gameId);
+      // 不再硬编码"条款 = 1"。条款从链上读回来，按盟约真实包含的条款依次
+      // 尝试挑战；链上会用真实吃子记录判定，没有证据会 revert。
+      // 违约方默认为 AI 座位（Demo 主线），可由 covenantBetrayer 覆盖。
+      const clauses = await clausesOf(covenantHash);
+      const betrayer = covenantBetrayer;
+      const challenger = accountForSeat(mySeat);
+
+      let lastErr: unknown = null;
+      for (const clause of clauses) {
+        if (clause === CLAUSE_NO_EXPOSE) continue; // 链上明确不支持该条款的挑战
+        try {
+          await challengeBetrayal(challenger, covenantHash, betrayer, clause);
+          setCovenantActive(false);
+          log(`背刺挑战成功 · BetrayalSlashed（条款 ${clause}）`, true);
+          toast("背刺罚没！", "盟约 bond 已划给受害方", "slash");
+          await refreshChainSeats(gameId);
+          return;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr ?? new Error("盟约里没有可挑战的条款");
     } catch (e: unknown) {
-      toast("Slash 失败", String(e));
+      toast("Slash 失败", friendlyError(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * 确保 AI 座位在声誉注册表里有身份。
+   * 注册表不再对陌生地址自动注册（否则 address(0) 之类的地址也能被写入战绩），
+   * 所以没注册时 finalizeGame 的声誉写入会被 try/catch 吞掉。这里按需补一次。
+   */
+  async function ensureAgentRegistered(account: Account) {
+    const rep = await readReputation(account.address);
+    if (rep.registered) return;
+    try {
+      await registerAgent(account, "sanguo://agent/mole-v1");
+      log("AI 身份已注册进 AgentRegistry", true);
+    } catch (err) {
+      // 已经注册过（并发或重复点击）不算失败
+      log(`AI 身份注册跳过：${friendlyError(err)}`);
     }
   }
 
@@ -354,6 +433,7 @@ export default function App() {
       ].join("\n");
       setMotiveLog(motive);
       setForcedBurn(burned);
+      await ensureAgentRegistered(aiAccount);
       const mh = keccak256(encodePacked(["string"], [motive]));
       await finalizeGame(deployer, gameId, mh);
       const rep = await readReputation(aiAccount.address);
@@ -392,6 +472,9 @@ export default function App() {
       );
     };
     setDemoSteps(steps);
+
+    // Demo 过程中要用到的 covenantHash（challenge 时需要同一个值）
+    let demoCovenantHash: Hex | null = null;
 
     try {
       const humanA = wallets.humanA ?? loadOrCreateWallet("humanA");
@@ -432,12 +515,30 @@ export default function App() {
           log(`卒 ${formatMon(spine.cheapFee)} MON · 车 ${formatMon(spine.chariotFee)} MON`, true);
         }
         if (m.tag === "betray") {
-          const hash = keccak256(encodePacked(["string", "uint256"], ["demo-cov", id]));
+          // 红营（0）发起、绿营 AI（2）接盟；条款与 bond 进入被签名的 preimage。
+          const clauses = [CLAUSE_NO_CAPTURE_ADVISOR, CLAUSE_NO_EXPOSE];
+          const bondAmount = BOND_PER_CLAUSE * BigInt(clauses.length);
+          const { preimage, hash } = buildPreimage({
+            gameId: id,
+            seatI: 0,
+            seatJ: AI_SEAT,
+            clauses,
+            bondAmount,
+          });
+          demoCovenantHash = hash;
           setCovenantHash(hash);
-          await lockEarnest(toAccount(humanA), id, hash, 0, parseEther("0.1"));
+          setCovenantBetrayer(AI_SEAT);
+
+          // 发起方红营锁诚意金 0.1 并签名
+          await lockEarnest(toAccount(humanA), id, hash, 0, preimage.earnestBond);
           const sigI = await signCovenantHash(toAccount(humanA), hash);
           const sigJ = await signCovenantHash(aiAccount, hash);
-          await activateCovenant(aiAccount, hash, id, 0, 2, [1, 2], sigI, sigJ, parseEther("0.2"));
+
+          // AI 来激活：付自己那一半 + 替红营补齐缺口
+          const each = bondAmount / 2n;
+          const proposerOwed = each > preimage.earnestBond ? each - preimage.earnestBond : 0n;
+          await activateCovenant(aiAccount, preimage, sigI, sigJ, proposerOwed + each);
+
           const meta = await readMeta(id);
           setActivatedPly(meta.ply);
           setCovenantActive(true);
@@ -449,7 +550,7 @@ export default function App() {
         await refreshChainSeats(id);
         if (m.tag === "betray") {
           log("绿营吃掉红方的士", true);
-          await challengeBetrayal(toAccount(humanA), keccak256(encodePacked(["string", "uint256"], ["demo-cov", id])), 2, 1);
+          await challengeBetrayal(toAccount(humanA), demoCovenantHash!, AI_SEAT, CLAUSE_NO_CAPTURE_ADVISOR);
           setCovenantActive(false);
           setStep("slash");
           toast("背刺罚没", "bond 进入受害方作战余额", "slash");
@@ -474,6 +575,7 @@ export default function App() {
       ].join("\n");
       setMotiveLog(motive);
       setForcedBurn(burned);
+      await ensureAgentRegistered(aiAccount);
       await finalizeGame(deployer, id, keccak256(encodePacked(["string"], [motive])));
       const rep = await readReputation(aiAccount.address);
       setTrustScore(Number(rep.trustScore));

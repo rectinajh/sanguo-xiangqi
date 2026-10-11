@@ -10,7 +10,6 @@ import { readFileSync } from "node:fs";
 import { createPublicClient, createWalletClient, defineChain, http, parseEther, keccak256, encodePacked, encodeAbiParameters } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { demoSpine, formatMon } from "@sanguo/shared";
-
 const root = new URL("..", import.meta.url);
 const addresses = JSON.parse(readFileSync(new URL("../frontend/src/lib/addresses.json", import.meta.url), "utf8"));
 const gameAbi = JSON.parse(readFileSync(new URL("../frontend/src/abi/GameTable.json", import.meta.url), "utf8"));
@@ -81,22 +80,62 @@ async function main() {
   const who = [humanA, humanB, ai] as const;
   let betrayHash: `0x${string}` | null = null;
 
+  // 协议要求：AI 座位在声誉注册表里有身份，否则 finalize 的声誉写入会被跳过。
+  // 注册表对重复注册会 revert("exists")，所以这里容错处理。
+  const regAbi = JSON.parse(readFileSync(new URL("../frontend/src/abi/AgentRegistry.json", import.meta.url), "utf8"));
+  try {
+    await send(ai, regAbi, addresses.AgentRegistry as `0x${string}`, "registerAgent", ["sanguo://agent/mole-v1"]);
+  } catch {
+    console.log("registerAgent skipped (already registered)");
+  }
+
   for (const m of spine.moves) {
     if (m.tag === "betray") {
-      betrayHash = keccak256(encodePacked(["string", "uint256"], ["demo-cov", id]));
-      await send(humanA, covAbi, covenant, "lockEarnest", [id, betrayHash, 0], parseEther("0.1"));
+      // 盟约条款与 bond 进入被签名的 preimage（链上会校验 hash 一致）
+      const clauses = [1, 2];
+      const bondAmount = parseEther("0.15") * BigInt(clauses.length);
+      const earnestBond = parseEther("0.1");
+      const zero = `0x${"00".repeat(32)}` as `0x${string}`;
+      // ⚠️ 必须与 abi.encode(struct) 一致 => 外面再套一层 tuple。
+      // 扁平展开会算出不同的 hash，导致 activateCovenant revert("pending")。
+      const PREIMAGE_ABI = [
+        {
+          type: "tuple",
+          components: [
+            { name: "gameId", type: "uint256" },
+            { name: "seatI", type: "uint8" },
+            { name: "seatJ", type: "uint8" },
+            { name: "clauses", type: "uint8[]" },
+            { name: "bondAmount", type: "uint256" },
+            { name: "earnestBond", type: "uint256" },
+            { name: "nonce", type: "bytes32" },
+            { name: "validFromPly", type: "uint32" },
+            { name: "validToPly", type: "uint32" },
+          ],
+        },
+      ] as const;
+      const enc = (nonce: `0x${string}`) =>
+        encodeAbiParameters(PREIMAGE_ABI, [
+          { gameId: id, seatI: 0, seatJ: 2, clauses, bondAmount, earnestBond, nonce, validFromPly: 0, validToPly: 80 },
+        ]);
+      const nonce = keccak256(enc(zero));
+      betrayHash = keccak256(enc(nonce));
+      const preimageTuple = [id, 0, 2, clauses, bondAmount, earnestBond, nonce, 0, 80] as const;
+
+      // 发起方红营锁诚意金
+      await send(humanA, covAbi, covenant, "lockEarnest", [id, betrayHash, 0], earnestBond);
+
       const sig = async (account: typeof humanA) =>
         wallet(account).signMessage({ account, message: { raw: betrayHash! } });
+      // 由 AI 激活：付自己那一半 + 替发起方补齐缺口
+      const each = bondAmount / 2n;
+      const proposerOwed = each > earnestBond ? each - earnestBond : 0n;
       await send(ai, covAbi, covenant, "activateCovenant", [
-        betrayHash,
-        id,
-        0,
-        2,
-        [1, 2],
+        preimageTuple,
         await sig(humanA),
         await sig(ai),
         "0x",
-      ], parseEther("0.2"));
+      ], proposerOwed + each);
     }
     const salt = keccak256(encodePacked(["string", "uint8", "uint8"], [m.tag, m.from.x, m.from.y]));
     const commit = keccak256(
