@@ -7,6 +7,21 @@ optimizer = true
 optimizer_runs = 200
 via_ir = true
 ffi = false
+# ⚠️ 这个值必须保持在真实上限，否则会出现"测试全绿但链上部署不了"。
+# 历史教训：这里曾写 500_000 来迁就当时 146 KB 的 GameTable，结果 anvil 直接
+# 报 max initcode size exceeded，而 `forge test` 一直是绿的。
+#
+# 注意：forge 的 code_size_limit 同时约束**测试合约自身**的部署，而测试辅助合约
+# （GameTableHarness 等）会超过 24 KB，所以 `forge test` 需要更宽的值。
+# 因此约束由 `forge build --sizes` 与 CI 的 size-check 步骤来保证，
+# 而不是靠一个全局魔法数。
+code_size_limit = 24_576
+
+# 测试环境单独放宽（给测试辅助合约留空间，不影响上面的真实约束）。
+# ⚠️ forge test 不会自动套用 [profile.test]，必须显式指定 profile。
+#   因此 test:forge 脚本里带了 FOUNDRY_PROFILE=test。
+[profile.test]
+code_size_limit = 500_000
 
 [rpc_endpoints]
 local = "http://127.0.0.1:8545"

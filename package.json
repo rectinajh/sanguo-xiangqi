@@ -5,8 +5,8 @@
     "dev": "pnpm --filter frontend dev",
     "build:shared": "pnpm --filter @sanguo/shared build",
     "test:shared": "pnpm --filter @sanguo/shared test",
-    "test:forge": "cd contracts && forge test",
-    "anvil": "anvil --chain-id 31337 --block-time 1",
+    "test:forge": "cd contracts && FOUNDRY_PROFILE=test forge test",
+    "anvil": "anvil --chain-id 31337 --block-time 1 --code-size-limit 500000 --gas-limit 100000000",
     "deploy:local": "bash scripts/deploy-local.sh",
     "deploy:testnet": "bash scripts/deploy-testnet.sh",
     "demo": "pnpm --filter @sanguo/shared build && tsx scripts/demo-harness.ts",
@@ -15,7 +15,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && cd frontend && tsc -b --force && cd ../agent && tsc --noEmit && cd ../server && tsc --noEmit",
     "faucet": "pnpm --filter server faucet",
     "test:frontend": "pnpm --filter frontend test",
-    "test": "pnpm test:shared && pnpm --filter frontend test && cd contracts && forge test"
+    "gen:sanren": "tsx scripts/gen-sanren-solidity.ts",
+    "test": "pnpm test:shared && pnpm --filter frontend test && pnpm test:forge && pnpm size",
+    "indexer": "pnpm --filter server indexer",
+    "indexer:once": "pnpm --filter server indexer:once",
+    "size": "cd contracts && forge build --sizes"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {
