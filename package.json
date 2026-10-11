@@ -9,13 +9,17 @@
     "anvil": "anvil --chain-id 31337 --block-time 1",
     "deploy:local": "bash scripts/deploy-local.sh",
     "deploy:testnet": "bash scripts/deploy-testnet.sh",
-    "demo": "pnpm --filter @sanguo/shared build && tsx scripts/demo-harness.ts"
+    "demo": "pnpm --filter @sanguo/shared build && tsx scripts/demo-harness.ts",
+    "agent": "pnpm --filter @sanguo/shared build && pnpm --filter agent start",
+    "agent:dev": "pnpm --filter agent start",
+    "typecheck": "tsc --noEmit -p tsconfig.json && cd frontend && tsc -b --force && cd ../agent && tsc --noEmit"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {
     "@sanguo/shared": "workspace:*",
     "tsx": "^4.20.5",
-    "viem": "^2.21.0"
+    "viem": "^2.21.0",
+    "@types/node": "^22.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

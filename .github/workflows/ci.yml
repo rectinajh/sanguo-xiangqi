@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm build:shared
+
+      # --force 是必须的：过期的 tsconfig.tsbuildinfo 会让 tsc -b 直接短路成假通过
+      - name: Typecheck (frontend + agent + scripts)
+        run: pnpm typecheck
+
+      - name: Unit tests (shared rules engine)
+        run: pnpm test:shared
+
+      - name: Frontend production build
+        run: pnpm --filter frontend build
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Contract tests
+        run: pnpm test:forge
+
+      # 依赖告警不阻塞构建，但必须可见
+      - name: Dependency audit (informational)
+        run: pnpm audit --audit-level high || true

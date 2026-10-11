@@ -1,8 +1,20 @@
 {
   "name": "agent",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "description": "独立运行的 AI 卧底进程：自有 EOA、自主轮询回合、可接盟并在窗口到期后背刺",
   "scripts": {
-    "start:once": "echo 'AI is driven from frontend Demo / AI走一步 for MVP; standalone bot deferred'"
+    "start": "tsx src/index.ts",
+    "start:once": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@sanguo/shared": "workspace:*",
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0"
   }
 }
