@@ -6,14 +6,11 @@
  *   - 它会**自己轮询回合并自动走子**，不需要人类点"导演代走"
  *   - 它可以自主接盟、履约、然后在窗口到期后背刺
  *   - 终局时把 motiveLog 的哈希写进链上
+ *   - 若配置了 KIMI_API_KEY：用大模型选棋 + 走路解说 + 说话 + 背刺（失败回退脚本）
  *
  * 用法：
- *   AGENT_KEY=0x... pnpm agent
- * 可选：
- *   GAME_ID=3            只服务指定对局
- *   AGENT_SEAT=2         坐哪一座
- *   BETRAYAL_AFTER_PLIES=10  履约多少手之后背刺
- *   AGENT_POLL_MS=1500   轮询间隔
+ *   cp agent/.env.example agent/.env   # 填 AGENT_KEY / KIMI_API_KEY
+ *   pnpm agent
  */
 import { encodeAbiParameters, formatEther, keccak256, type Hex } from "viem";
 import {
@@ -28,6 +25,8 @@ import {
   type Seat,
 } from "@sanguo/shared";
 import { ABIS, loadConfig, makeClients, type AgentConfig } from "./chain.js";
+import { decideWithKimi, loadKimiConfig, type KimiConfig } from "./kimi.js";
+import { loadAgentEnv } from "./loadEnv.js";
 import { MotiveLog } from "./motiveLog.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -52,6 +51,7 @@ class MoleAgent {
   constructor(
     private readonly cfg: AgentConfig,
     private readonly ctx: Ctx,
+    private readonly kimi: KimiConfig | null,
   ) {}
 
   private get seat(): Seat {
@@ -68,6 +68,13 @@ class MoleAgent {
     this.say(`地址 ${this.ctx.account.address}`);
     this.say(`链 ${this.cfg.chainId} · ${this.cfg.rpcUrl}`);
     this.say(`GameTable ${this.cfg.addresses.GameTable}`);
+    if (this.kimi) {
+      this.say(
+        `Kimi 已启用 · model=${this.kimi.model} · move=${this.kimi.enableMove} walk=${this.kimi.enableWalk} speech=${this.kimi.enableSpeech} betrayal=${this.kimi.enableBetrayal}`
+      );
+    } else {
+      this.say("Kimi 未配置（无 KIMI_API_KEY）· 使用脚本 pickAiMove");
+    }
 
     await this.ensureRegistered();
 
@@ -310,29 +317,65 @@ class MoleAgent {
       ply - st.activatedPly >= this.cfg.betrayalAfterPlies &&
       !st.betrayed;
 
-    const pick = pickAiMove(board, {
-      allySeat: st.covenantHash ? this.allySeatOf(board) : null,
+    const allySeat = st.covenantHash ? this.allySeatOf(board) : null;
+    const moves = legalMoves(board, this.seat);
+    const script = pickAiMove(board, {
+      allySeat,
       activatedPly: st.activatedPly,
       forceBetrayal: ripe,
     });
-    if (!pick) {
+    if (!script || !moves.length) {
       this.say(`局 ${gameId}：没有合法着法`);
       return;
     }
 
-    if (ripe && pick.capture === Piece.Advisor) {
+    let pick = script;
+    let walk = "";
+    let speech = "";
+    let source: "kimi" | "script" = "script";
+
+    if (this.kimi) {
+      try {
+        const d = await decideWithKimi(this.kimi, {
+          board,
+          seat: this.seat,
+          ply,
+          moves,
+          allySeat,
+          betrayalRipe: ripe,
+          scriptFallback: script,
+        });
+        pick = d.move;
+        walk = d.walk;
+        speech = d.speech;
+        source = d.source;
+        if (walk) this.say(`局 ${gameId}：【走】${walk}`);
+        if (speech) this.say(`局 ${gameId}：【说】${speech}`);
+        if (d.reason) this.say(`局 ${gameId}：【因】${d.reason} · ${source}`);
+      } catch (e) {
+        this.say(`局 ${gameId}：Kimi 失败，回退脚本 · ${(e as Error).message.split("\n")[0]}`);
+      }
+    }
+
+    const allyHit =
+      ripe &&
+      allySeat !== null &&
+      pick.capture === Piece.Advisor &&
+      board.cells[pick.to.y][pick.to.x].seat === allySeat;
+
+    if (allyHit) {
       st.betrayed = true;
       this.log.push({
         ply,
         kind: "betray",
-        detail: `fake sincerity: captured ally advisor from (${pick.from.x},${pick.from.y})→(${pick.to.x},${pick.to.y})`,
+        detail: `fake sincerity: captured ally advisor from (${pick.from.x},${pick.from.y})→(${pick.to.x},${pick.to.y})${speech ? ` | ${speech}` : ""}`,
       });
-      this.say(`局 ${gameId}：背刺！吃掉盟友的士（ply ${ply}）`);
+      this.say(`局 ${gameId}：背刺！吃掉盟友的士（ply ${ply}）· ${source}`);
     } else {
       this.log.push({
         ply,
         kind: pick.capture === Piece.Empty ? "open" : "capture",
-        detail: `(${pick.from.x},${pick.from.y})→(${pick.to.x},${pick.to.y})`,
+        detail: `${walk || `(${pick.from.x},${pick.from.y})→(${pick.to.x},${pick.to.y})`}${speech ? ` | ${speech}` : ""}`,
         forcedBurn: await this.estimateOpponentBurn(board, pick),
       });
     }
@@ -429,9 +472,11 @@ class MoleAgent {
 }
 
 async function main() {
+  loadAgentEnv();
   const cfg = loadConfig();
+  const kimi = loadKimiConfig();
   const ctx = makeClients(cfg);
-  const agent = new MoleAgent(cfg, ctx);
+  const agent = new MoleAgent(cfg, ctx, kimi);
   await agent.run();
 }
 

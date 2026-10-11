@@ -12,7 +12,10 @@
     "demo": "pnpm --filter @sanguo/shared build && tsx scripts/demo-harness.ts",
     "agent": "pnpm --filter @sanguo/shared build && pnpm --filter agent start",
     "agent:dev": "pnpm --filter agent start",
-    "typecheck": "tsc --noEmit -p tsconfig.json && cd frontend && tsc -b --force && cd ../agent && tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.json && cd frontend && tsc -b --force && cd ../agent && tsc --noEmit && cd ../server && tsc --noEmit",
+    "faucet": "pnpm --filter server faucet",
+    "test:frontend": "pnpm --filter frontend test",
+    "test": "pnpm test:shared && pnpm --filter frontend test && cd contracts && forge test"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {

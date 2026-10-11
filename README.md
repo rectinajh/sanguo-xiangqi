@@ -56,38 +56,69 @@ Three-player Xiangqi with one staked AI mole — every move is a transaction tha
 
 失败时这样说：电路还没做，所以这不是完整 ZK。扣费、诚意金、吃士、Slash、Points 是真交易。`StubVerifier` 拒绝任何非空证明，避免空验证器冒充 ZK。
 
-## 五条命令（本地）
+## 本地跑通（含 AI 与水龙头）
 
 ```bash
 pnpm install
-pnpm test:forge
-pnpm anvil          # 终端 A
-pnpm deploy:local   # 终端 B
-pnpm dev            # 终端 C，然后点「一键 Demo 脊骨」
+pnpm test           # shared + 前端 + 合约，全绿
+pnpm anvil          # 终端 A：本地链
+pnpm deploy:local   # 终端 B：部署（幂等，重复跑会复用）
+pnpm faucet         # 终端 C：水龙头，给新地址发 3.2 MON
+pnpm dev            # 终端 D：前端
 ```
 
-同一条剧本也可以：
+打开页面后有三条路径：
+
+| 路径 | 怎么做 | 适合 |
+|------|--------|------|
+| **一键 Demo** | 点右上「一键 Demo 脊骨」 | 30 秒看完扣费→结盟→背刺→Slash→揭示 |
+| **真人对局** | 点「创建房间」→ 复制邀请链接 → 发给两位朋友各自入座 | 体验真实的多人与钱包流程 |
+| **AI 自动对局** | 另开终端 `AGENT_KEY=0x59c6… pnpm agent` | 让 AI 自己轮询回合、自己接盟与背刺 |
+
+`pnpm demo` 是纯脚本版的同一条脊骨，只打 Anvil `31337`：它使用公开的 Anvil 私钥，
+因此**禁止**对 `10143` 运行（脚本会自己拒绝）。
+
+### 房间与邀请链接
+
+房间号就是链上 `gameId`，对局的唯一真源是合约 —— **不需要房间服务器**。
+邀请链接形如 `http://localhost:5173/#/r/12`，朋友点开即自动进入该房间并看到谁已入座。
+
+### 水龙头
+
+`server/` 是一个独立进程，用**服务端热钱包**给新用户发 MON。私钥只在服务端：
 
 ```bash
-pnpm demo
+FAUCET_KEY=0x... RPC_URL=... CHAIN_ID=10143 pnpm faucet
 ```
 
-`pnpm demo` 只打 Anvil `31337`。它使用公开的 Anvil 私钥，禁止对 `10143` 运行。
+它拒绝在 Monad 主网（143）启动、拒绝使用公开已知的 Anvil 测试钥、
+每个地址限领一次、每个 IP 每日限额，并且只给余额低于阈值的地址发。
 
 ## Monad 10143
 
-有测试网余额时：
+有测试网余额时（**请用你自己新建、只有你持有的钥**）：
 
 ```bash
 MONAD_RPC=https://testnet-rpc.monad.xyz PRIVATE_KEY=0x... pnpm deploy:testnet
 ```
 
-脚本会在余额为 0 或缺少变量时直接退出，不编造地址和交易哈希。广播成功后，地址写进 `frontend/src/lib/addresses.json`，终端会打出交易哈希，再把这两样抄回本节。
+脚本会断言 RPC 的 chainId 就是 `10143`、拒绝公开 Anvil 钥、余额为 0 或缺变量时直接退出，
+不编造地址和交易哈希。广播成功后地址写入 `frontend/src/lib/addresses.10143.json`
+（**不会**覆盖本地演示用的 `addresses.json`），终端会打出交易哈希。
+
+前端指向测试网有两种方式：把上面那个文件的内容配上 `VITE_*` 环境变量（见 `frontend/.env.example`），
+或让 `deploy:testnet` 的产物走 CI 注入。
 
 当前仓库没有一笔已确认的 10143 交易。主网 143 不在这一版。
 
 ## 已实现 / 未做
 
-已实现：费用、commit-reveal、吃子与击败 40% 质押、按最便宜合法着破产、人类补给、AI 禁止补给、诚意金上限读链上余额、疏火、证据 Slash、60 秒未揭示扣 0.03 MON、终局 70/20/10、声誉。
+已实现：费用、commit-reveal、吃子与击败 40% 质押、按最便宜合法着破产、人类补给、AI 禁止补给、诚意金上限读链上余额、疏火、证据 Slash、60 秒未揭示扣 0.03 MON、终局 70/20/10、声誉；**浏览器钱包接入**、**邀请链接房间（含实时轮询）**、**水龙头服务**、**独立 AI agent 进程**。
 
-未做：完整 ZK、谣言店、指控投票、代付盟友油费、独立 agent 进程、完整棋规。
+未做：完整 ZK、谣言店、指控投票、代付盟友油费、完整棋规、将军/将死判定、匹配大厅与排行榜。
+
+### 安全说明（评审修复）
+
+第一轮代码评审确认的三个漏洞已修复并有回归测试钉死，详见 [docs/DEV_CHECKLIST.md](docs/DEV_CHECKLIST.md)：
+结算任意 Lobby 局（可锁死他人质押）、背刺者自行"履约"逃掉罚没、G1 隐私映射对外可见。
+另有 8 项高危（非胜者质押不退、结算重入、金库不可提取等）一并修复。测试从 19 项增至 31 项。

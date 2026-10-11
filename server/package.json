@@ -1,0 +1,19 @@
+{
+  "name": "server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "水龙头服务：用服务端热钱包给测试网新用户发 MON（私钥绝不进前端）",
+  "scripts": {
+    "faucet": "tsx src/faucet.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.6.3"
+  }
+}

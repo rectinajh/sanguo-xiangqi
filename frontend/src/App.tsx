@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BoardState,
   Coord,
@@ -38,6 +38,8 @@ import {
   assertCorrectChain,
   getInjectedWalletClient,
 } from "./lib/chain";
+import { copyText, describeRoom, inviteLinkFor, parseRoomFromUrl, setRoomInUrl } from "./lib/room";
+import { faucetHealth, requestDrip, faucetUrl } from "./lib/faucet";
 import {
   hasAddresses,
   createGame,
@@ -149,6 +151,20 @@ export default function App() {
   const [forcedBurn, setForcedBurn] = useState<bigint | undefined>(undefined);
   const [demoSteps, setDemoSteps] = useState<DemoStep[]>([]);
 
+  // ── 房间 / 邀请 / 水龙头 ─────────────────────────────────────
+  /** 当前要进入的房间号（= 链上 gameId） */
+  const [roomId, setRoomId] = useState<bigint | null>(null);
+  /** 开房后生成的邀请链接 */
+  const [inviteLink, setInviteLink] = useState<string>("");
+  const [inviteCopied, setInviteCopied] = useState(false);
+  /** 水龙头状态（服务端是否可达 + 剩余可发次数） */
+  const [faucetUp, setFaucetUp] = useState<boolean | null>(null);
+  const [faucetBusy, setFaucetBusy] = useState(false);
+  const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 轮询 effect 通过 ref 取最新的刷新函数与房间号，避免闭包拿到过期值 */
+  const refreshRef = useRef<((id: bigint, silent?: boolean) => Promise<void>) | null>(null);
+  const roomRef = useRef<bigint | null>(null);
+
   const log = useCallback((t: string, hl?: boolean) => {
     setLogs((prev) => [{ t, hl }, ...prev].slice(0, 40));
   }, []);
@@ -157,6 +173,23 @@ export default function App() {
     const id = `${Date.now()}-${Math.random()}`;
     setToasts((p) => [...p, { id, title, body, kind }]);
     setTimeout(() => setToasts((p) => p.filter((x) => x.id !== id)), 4500);
+  }, []);
+
+  // 打开带邀请链接的页面时，自动进入对应房间
+  useEffect(() => {
+    const r = parseRoomFromUrl();
+    if (r !== null) {
+      setRoomId(r);
+      log(`收到邀请：进入房间 #${r}`, true);
+    }
+  }, [log]);
+
+  // 探测水龙头服务（仅真实网络需要；本地当然也有，方便自测）
+  useEffect(() => {
+    (async () => {
+      const h = await faucetHealth();
+      setFaucetUp(h?.ok === true);
+    })();
   }, []);
 
   // 探测 RPC：不只是"有没有应答"，还要校验链 ID 与应用配置一致
@@ -179,7 +212,13 @@ export default function App() {
     })();
   }, []);
 
-  async function refreshChainSeats(id: bigint) {
+  /**
+   * 从链上刷新座位/阶段。
+   * `silent` 供后台轮询使用：不改状态文案、不打日志，避免每几秒刷屏。
+   */
+  async function refreshChainSeats(id: bigint, silent = false) {
+    // silent 仅表示"这是后台轮询"，用于抑制日志噪音
+    void silent;
     const views: SeatView[] = [];
     for (let s = 0; s < 3; s++) {
       const r = await readSeat(id, s);
@@ -316,6 +355,94 @@ export default function App() {
     return true;
   }
   const iAmSeated = activeSeat !== null;
+
+  // 让 refreshChainSeats 与 roomId 始终可被轮询 effect 取到最新值
+  refreshRef.current = refreshChainSeats;
+  roomRef.current = roomId;
+
+  /**
+   * 后台轮询：轮询期间"别人入座了 / 别人走了一步"能自动出现。
+   * 大厅阶段刷得勤一些（要显示谁进来了），对局中放慢以省 RPC。
+   */
+  useEffect(() => {
+    const period = phase === 0 ? 3000 : 6000;
+    const t = setInterval(async () => {
+      const id = roomRef.current;
+      if (id === null) return;
+      try {
+        await refreshRef.current?.(id, true);
+        if (walletAddress) {
+          const bal = await getPublicClient().getBalance({ address: walletAddress });
+          setMyBalance(bal);
+        }
+      } catch {
+        /* 轮询失败静默重试，不打扰用户 */
+      }
+    }, period);
+    return () => clearInterval(t);
+  }, [phase, walletAddress]);
+
+  /** 开一张新房并生成邀请链接（真实钱包模式下的主入口）。 */
+  async function createRoom() {
+    setBusy(true);
+    setStatus("创建房间…");
+    try {
+      setBoard(initialBoard());
+      setSelected(null);
+      setCovenantHash(null);
+      setCovenantActive(false);
+      setActivatedPly(null);
+      setAiRevealed(false);
+      setRevealOpen(false);
+
+      const id = await createGame(deployer, AI_SEAT);
+      setGameId(id);
+      setRoomId(id);
+      roomRef.current = id;
+      setRoomInUrl(id);
+      const link = inviteLinkFor(id);
+      setInviteLink(link);
+      setInviteCopied(false);
+      log(`房间 #${id} 已创建 · 把邀请链接发给两位朋友`, true);
+      log(`邀请链接 ${link}`);
+      toast("房间已创建", "复制邀请链接，发给两位朋友各入一座");
+      await refreshChainSeats(id);
+    } catch (e: unknown) {
+      toast("建房失败", friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 领测试币：走服务端水龙头，私钥不在前端。 */
+  async function claimFaucet() {
+    if (!walletAddress) return;
+    setFaucetBusy(true);
+    try {
+      const r = await requestDrip(walletAddress);
+      if (!r.ok) throw new Error(r.error);
+      const bal = await getPublicClient().getBalance({ address: walletAddress });
+      setMyBalance(bal);
+      log(`水龙头发放 ${r.amountMon} MON · ${r.hash.slice(0, 12)}…`, true);
+      toast("已到账", `+${r.amountMon} MON，可以入座了`);
+    } catch (e: unknown) {
+      toast("领取失败", friendlyError(e));
+    } finally {
+      setFaucetBusy(false);
+    }
+  }
+
+  /** 复制邀请链接。 */
+  async function copyInvite() {
+    const ok = await copyText(inviteLink);
+    setInviteCopied(ok);
+    if (ok) {
+      toast("链接已复制", "发给两位朋友即可开局");
+      setTimeout(() => setInviteCopied(false), 2500);
+    } else {
+      toast("复制失败", "请手动选中链接复制");
+    }
+  }
 
   async function startMatch() {
     if (!wallets.humanA || !wallets.humanB) return;
@@ -776,8 +903,12 @@ export default function App() {
                 ? "连接 / 灌测币"
                 : "连接钱包"}
           </button>
-          <button className="secondary" disabled={busy || !connected} onClick={startMatch}>
-            新开一局
+          <button
+            className="secondary"
+            disabled={busy || !connected}
+            onClick={isLocalDemo ? startMatch : createRoom}
+          >
+            {isLocalDemo ? "新开一局" : "创建房间"}
           </button>
         </div>
       </header>
@@ -875,33 +1006,136 @@ export default function App() {
 
           {!isLocalDemo && (
             <div className="panel">
-              <h2>入座</h2>
-              {!connected && <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>先连接钱包。</p>}
-              {connected && gameId === null && (
-                <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>还没有进行中的对局，请先「新开一局」。</p>
+              <h2>房间</h2>
+
+              {!connected && (
+                <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>先连接浏览器钱包。</p>
               )}
-              {connected && gameId !== null && (
+
+              {connected && (
                 <>
-                  <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginTop: 0 }}>
-                    入座需要 {formatMon(JOIN_VALUE)} MON（1 MON 质押 + 2 MON 作战余额），
-                    从你自己的钱包支付。一个钱包只能占一个座位。
-                  </p>
-                  <div className="actions">
-                    {([0, 1, 2] as Seat[]).map((s) => {
-                      const occupied = Boolean(seats[s]?.address && seats[s].address !== "0x0000000000000000000000000000000000000000");
-                      const mine = seatOwningWallet(s) !== null;
-                      return (
-                        <button
-                          key={s}
-                          className={mine ? "primary" : "secondary"}
-                          disabled={busy || occupied || phase !== 0}
-                          onClick={() => joinSeatAsMe(s)}
-                        >
-                          {mine ? `你在${SEAT_LABEL_ZH[s]}` : occupied ? `${SEAT_LABEL_ZH[s]} 已满` : `入座${SEAT_LABEL_ZH[s]}`}
-                        </button>
-                      );
-                    })}
+                  {/* 余额 / 水龙头 */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                      余额 {myBalance === null ? "…" : formatMon(myBalance)} MON
+                    </span>
+                    <button
+                      className="secondary"
+                      style={{ padding: "0.35rem 0.7rem", fontSize: "0.78rem" }}
+                      disabled={faucetBusy || !walletAddress}
+                      onClick={claimFaucet}
+                      title={faucetUp === false ? `水龙头不可达（${faucetUrl()}）` : "每个地址可领一次"}
+                    >
+                      {faucetBusy ? "领取中…" : "领测试币"}
+                    </button>
                   </div>
+                  {faucetUp === false && (
+                    <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: -4, marginBottom: 10 }}>
+                      水龙头未启动（{faucetUrl()}）。本地开发跑 <code>pnpm faucet</code>；
+                      公网请配置 <code>VITE_FAUCET_URL</code>。也可以自行去公开水龙头领 MON。
+                    </p>
+                  )}
+
+                  {/* 房间号 / 邀请链接 */}
+                  {roomId !== null ? (
+                    <>
+                      <p style={{ fontSize: "0.82rem", color: "var(--muted)", margin: "0 0 6px" }}>
+                        房间 <strong style={{ color: "var(--text)" }}>#{roomId.toString()}</strong> ·{" "}
+                        {describeRoom(seats, phase).summary}
+                      </p>
+
+                      {/* 座位占用一览 */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+                        {([0, 1, 2] as Seat[]).map((s) => {
+                          const a = seats[s]?.address;
+                          const taken = Boolean(a && a !== "0x0000000000000000000000000000000000000000");
+                          const mine = seatOwningWallet(s) !== null;
+                          return (
+                            <div key={s} style={{ fontSize: "0.78rem", display: "flex", gap: 6, alignItems: "center" }}>
+                              <span
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: 4,
+                                  background: taken ? (mine ? "var(--ok)" : "var(--muted)") : "transparent",
+                                  border: taken ? "none" : "1px solid var(--muted)",
+                                  flex: "0 0 auto",
+                                }}
+                              />
+                              <span style={{ color: mine ? "var(--ok)" : "var(--muted)" }}>
+                                {SEAT_LABEL_ZH[s]}
+                                {mine ? " · 你" : ""}
+                                {taken && !mine ? ` · ${a!.slice(0, 6)}…${a!.slice(-4)}` : ""}
+                                {!taken ? " · 空" : ""}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {inviteLink && phase === 0 && (
+                        <>
+                          <input
+                            readOnly
+                            value={inviteLink}
+                            onFocus={(e) => e.currentTarget.select()}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.72rem",
+                              padding: "0.4rem 0.5rem",
+                              marginBottom: 6,
+                              borderRadius: 8,
+                              border: "1px solid var(--border)",
+                              background: "var(--panel2)",
+                              color: "var(--text)",
+                            }}
+                          />
+                          <button className="primary" disabled={busy} onClick={copyInvite}>
+                            {inviteCopied ? "已复制 ✓" : "复制邀请链接"}
+                          </button>
+                        </>
+                      )}
+
+                      {/* 入座 */}
+                      {phase === 0 && (
+                        <div className="actions" style={{ marginTop: 10 }}>
+                          {([0, 1, 2] as Seat[]).map((s) => {
+                            const a = seats[s]?.address;
+                            const occupied = Boolean(a && a !== "0x0000000000000000000000000000000000000000");
+                            const mine = seatOwningWallet(s) !== null;
+                            if (mine || occupied) return null;
+                            return (
+                              <button key={s} className="secondary" disabled={busy} onClick={() => joinSeatAsMe(s)}>
+                                入座{SEAT_LABEL_ZH[s]}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <p style={{ fontSize: "0.72rem", color: "var(--muted)", marginTop: 10, marginBottom: 0 }}>
+                        入座需 {formatMon(JOIN_VALUE)} MON（1 质押 + 2 作战），从你自己的钱包支付。
+                        三座坐满即自动开局；其中恰好一座是 AI，终局才会揭晓。
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
+                        还没有房间。开一张新房，把邀请链接发给两位朋友。
+                      </p>
+                      <button className="primary" disabled={busy || chainOk === false} onClick={createRoom}>
+                        创建房间
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </div>

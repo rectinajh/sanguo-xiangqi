@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_COVENANT?: string;
   readonly VITE_AGENTREGISTRY?: string;
   readonly VITE_STUBVERIFIER?: string;
+  readonly VITE_FAUCET_URL?: string;
 }
 
 interface ImportMeta {

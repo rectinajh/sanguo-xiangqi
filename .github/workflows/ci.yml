@@ -36,6 +36,9 @@ jobs:
       - name: Unit tests (shared rules engine)
         run: pnpm test:shared
 
+      - name: Unit tests (frontend)
+        run: pnpm --filter frontend test
+
       - name: Frontend production build
         run: pnpm --filter frontend build
 
