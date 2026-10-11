@@ -25,7 +25,19 @@ import {
   fundFromAnvil,
   type SessionWallet,
 } from "./lib/wallet";
-import { accountFromKey, ANVIL_KEYS, getPublicClient, addresses } from "./lib/chain";
+import {
+  accountFromKey,
+  ANVIL_KEYS,
+  getPublicClient,
+  addresses,
+  activeChain,
+  IS_LOCAL_DEMO,
+  hasInjectedWallet,
+  requestInjectedAccount,
+  ensureInjectedChain,
+  assertCorrectChain,
+  getInjectedWalletClient,
+} from "./lib/chain";
 import {
   hasAddresses,
   createGame,
@@ -96,6 +108,16 @@ export default function App() {
   const aiAccount = useMemo(() => accountFromKey(ANVIL_KEYS.ai), []);
   const deployer = useMemo(() => accountFromKey(ANVIL_KEYS.deployer), []);
 
+  // ── 真实玩家身份 ─────────────────────────────────────────────
+  // 本地演示（chainId 31337）沿用内置测试钥 + 双人左右互搏；
+  // 其它链上一律走浏览器钱包，一个浏览器只代表一个玩家。
+  const [walletAddress, setWalletAddress] = useState<`0x${string}` | null>(null);
+  const [walletKind, setWalletKind] = useState<"none" | "injected" | "local">("none");
+  const [chainName, setChainName] = useState<string>("");
+  const isLocalDemo = IS_LOCAL_DEMO;
+  /** 我在链上占的座位；null 表示还没入座 */
+  const [mySeatOrNull, setMySeatOrNull] = useState<Seat | null>(null);
+
   const [gameId, setGameId] = useState<bigint | null>(null);
   const [board, setBoard] = useState<BoardState>(() => initialBoard());
   const [mySeat, setMySeat] = useState<Seat>(0);
@@ -137,12 +159,19 @@ export default function App() {
     setTimeout(() => setToasts((p) => p.filter((x) => x.id !== id)), 4500);
   }, []);
 
-  // Probe RPC
+  // 探测 RPC：不只是"有没有应答"，还要校验链 ID 与应用配置一致
   useEffect(() => {
     (async () => {
       try {
         const pub = getPublicClient();
         await pub.getBlockNumber();
+        const actual = await pub.getChainId();
+        setChainName(activeChain.name);
+        if (actual !== addresses.chainId) {
+          setChainOk(false);
+          setStatus(`链不匹配：RPC=${actual}，应用配置=${addresses.chainId}`);
+          return;
+        }
         setChainOk(true);
       } catch {
         setChainOk(false);
@@ -175,23 +204,48 @@ export default function App() {
     }
   }
 
-  async function setupSession() {
+  /**
+   * 连接玩家身份。
+   * - 公网/测试网：请求浏览器钱包授权、切到正确的链，私钥始终留在钱包里。
+   * - 本地演示：沿用内置测试钥，并自动灌测币，方便一键跑通。
+   */
+  async function connectWallet() {
     setBusy(true);
-    setStatus("创建临时钱包…");
     try {
+      if (!hasAddresses()) {
+        throw new Error("合约地址不完整 —— 本地请先跑 pnpm deploy:local");
+      }
+      setStatus("校验链 ID…");
+      await assertCorrectChain();
+
+      if (!isLocalDemo) {
+        if (!hasInjectedWallet()) {
+          throw new Error(
+            `${activeChain.name} 上需要使用浏览器钱包。请安装 MetaMask 等 EIP-1193 钱包后刷新页面。`
+          );
+        }
+        setStatus("等待钱包授权…");
+        const ok = await ensureInjectedChain();
+        if (!ok) throw new Error(`请在钱包里切换到 ${activeChain.name}（chainId ${addresses.chainId}）`);
+        const addr = await requestInjectedAccount();
+        setWalletAddress(addr);
+        setWalletKind("injected");
+        setConnected(true);
+        setStatus("钱包已连接");
+        log(`钱包已连接 ${addr.slice(0, 10)}…（私钥不出钱包）`, true);
+        toast("钱包已连接", "接下来在棋盘上选一个空座入座");
+        return;
+      }
+
+      // —— 本地演示路径 ——
       const humanA = loadOrCreateWallet("humanA");
       const humanB = loadOrCreateWallet("humanB");
       setWallets({ humanA, humanB });
-      if (!hasAddresses()) {
-        setStatus("未部署合约 — 请先跑 deploy:local");
-        toast("缺少合约地址", "运行 pnpm deploy:local", "info");
-        setBusy(false);
-        return;
-      }
+      setWalletAddress(humanA.address);
+      setWalletKind("local");
       setStatus("从 Anvil 灌测币…");
       await fundFromAnvil(humanA.address, "8");
       await fundFromAnvil(humanB.address, "8");
-      // AI already has anvil #1 funded by default, top up anyway
       await fundFromAnvil(aiAccount.address, "8");
       setConnected(true);
       setStatus("钱包就绪 · 可开局");
@@ -200,9 +254,10 @@ export default function App() {
       log("第三把独立密钥已就绪，终局前不公开身份");
       toast("会话就绪", "人类临时钱包已生成并注资；第三把密钥与人类钥隔离");
     } catch (e: unknown) {
+      const msg = friendlyError(e);
       setStatus("连接失败");
-      toast("Anvil 未就绪", String(e), "info");
-      setChainOk(false);
+      toast("钱包连接失败", msg);
+      if (!isLocalDemo) setConnected(false);
     } finally {
       setBusy(false);
     }
@@ -213,6 +268,54 @@ export default function App() {
     if (seat === 0) return toAccount(wallets.humanA!);
     return toAccount(wallets.humanB!);
   }
+
+  /**
+   * 返回"我"在某个座位上的签名者。
+   *
+   * - 本地演示：三个座位都在本地，可以左右互搏（Demo 需要）。
+   * - 公网/测试网：只有连上钱包的那个座位归我，其它座位一律拒绝签名。
+   *   这一条是"多人同桌"能成立的前提 —— 一个浏览器只代表一个玩家。
+   */
+  function signerForSeat(seat: Seat): Account | `0x${string}` {
+    if (!isLocalDemo) {
+      const mine = seatOwningWallet(seat);
+      if (!mine) throw new Error("这不是你的座位 —— 一个钱包只能操控自己入座的那一座");
+      return mine;
+    }
+    return accountForSeat(seat);
+  }
+
+  /** 我连的钱包地址占了哪一座（没入座返回 null）。 */
+  function seatOwningWallet(seat: Seat): `0x${string}` | null {
+    if (!walletAddress) return null;
+    const s = seats[seat];
+    if (!s?.address) return null;
+    return s.address.toLowerCase() === walletAddress.toLowerCase() ? walletAddress : null;
+  }
+
+  /** 我在链上实际占的座位。 */
+  function seatOfMe(): Seat | null {
+    if (walletKind === "local") return mySeat;
+    if (!walletAddress) return null;
+    for (const s of [0, 1, 2] as Seat[]) {
+      const a = seats[s]?.address;
+      if (a && a.toLowerCase() === walletAddress.toLowerCase()) return s;
+    }
+    return null;
+  }
+
+  /**
+   * 当前正在代表的座位。
+   * - 本地演示：可以自由切换看哪一座（一个人左右互搏跑 Demo）。
+   * - 真实钱包：只等于我入座的那一座；没入座就是只读观战。
+   */
+  const activeSeat: Seat | null = walletKind === "local" ? mySeat : seatOfMe();
+  /** 我是否能替某个座位签名。真实钱包只认自己那一座。 */
+  function canSignFor(seat: Seat): boolean {
+    if (walletKind !== "local") return seatOwningWallet(seat) !== null;
+    return true;
+  }
+  const iAmSeated = activeSeat !== null;
 
   async function startMatch() {
     if (!wallets.humanA || !wallets.humanB) return;
@@ -389,6 +492,35 @@ export default function App() {
       throw lastErr ?? new Error("盟约里没有可挑战的条款");
     } catch (e: unknown) {
       toast("Slash 失败", friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 真实钱包入座：用我自己钱包里的 MON 支付 seatStake + playBalance，
+   * 成为这一座的玩家。入座后这个浏览器就只代表这一座。
+   * 这是"多人同桌"能成立的前提 —— 每个玩家用自己的钱入自己的座。
+   */
+  async function joinSeatAsMe(seat: Seat) {
+    if (gameId === null || !walletAddress) return;
+    setBusy(true);
+    setStatus(`入座${SEAT_LABEL_ZH[seat]}…`);
+    try {
+      const pub = getPublicClient();
+      const bal = await pub.getBalance({ address: walletAddress });
+      if (bal < JOIN_VALUE) {
+        throw new Error(
+          `余额不足：入座需要 ${formatMon(JOIN_VALUE)} MON，你当前 ${formatMon(bal)} MON。请先去水龙头领取测试币。`
+        );
+      }
+      // 传入钱包地址即可：签名由浏览器钱包完成，私钥不出钱包
+      await joinGame(walletAddress, gameId, seat, JOIN_VALUE);
+      await refreshChainSeats(gameId);
+      log(`我入座${SEAT_LABEL_ZH[seat]} · 锁 1 MON 质押 + 2 MON 作战余额`, true);
+      toast("入座成功", `你现在是${SEAT_LABEL_ZH[seat]}`);
+    } catch (e: unknown) {
+      toast("入座失败", friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -628,15 +760,21 @@ export default function App() {
           <div className="badge-row">
             <span className="badge accent">赛道 04 · AI 身份与声誉</span>
             <span className="badge">ZK-ready · 非完整 ZK</span>
-            <span className="badge">本地 Anvil / Monad-ready</span>
+            <span className="badge">{chainName || activeChain.name} · chainId {addresses.chainId}</span>
           </div>
         </div>
         <div className="actions" style={{ minWidth: 200 }}>
           <button className="primary" disabled={busy || chainOk === false} onClick={runDemoFull}>
             {busy ? "进行中…" : "一键 Demo 脊骨"}
           </button>
-          <button className="secondary" disabled={busy || chainOk === false} onClick={setupSession}>
-            连接 / 灌测币
+          <button className="secondary" disabled={busy || chainOk === false} onClick={connectWallet}>
+            {connected
+              ? walletKind === "injected"
+                ? `${walletAddress?.slice(0, 6)}…${walletAddress?.slice(-4)} 已连接`
+                : "本地会话已就绪"
+              : isLocalDemo
+                ? "连接 / 灌测币"
+                : "连接钱包"}
           </button>
           <button className="secondary" disabled={busy || !connected} onClick={startMatch}>
             新开一局
@@ -646,14 +784,39 @@ export default function App() {
 
       <div className="status-bar">
         <span className={`status-pill ${chainOk ? "ok" : chainOk === false ? "err" : "warn"}`}>
-          {chainOk === null ? "检测 RPC…" : chainOk ? `链已连接 · ${addresses.rpcUrl}` : "Anvil 未启动"}
+          {chainOk === null
+            ? "检测 RPC…"
+            : chainOk
+              ? `${chainName || activeChain.name} 已连接`
+              : isLocalDemo
+                ? "本地链未就绪"
+                : `链不匹配或不可达（需要 chainId ${addresses.chainId}）`}
         </span>
+        {!isLocalDemo && (
+          <span className={`status-pill ${iAmSeated ? "ok" : "warn"}`}>
+            {iAmSeated ? `我的座位：${SEAT_LABEL_ZH[activeSeat!]}` : "未入座"}
+          </span>
+        )}
         <span className="status-pill">{hasAddresses() ? `GameTable ${addresses.GameTable.slice(0, 8)}…` : "未部署"}</span>
         <span className="status-pill warn">{status}</span>
         {gameId !== null && <span className="status-pill">局 #{gameId.toString()} · {phaseLabel} · ply {ply}</span>}
       </div>
 
-      {!chainOk && chainOk !== null && (
+      {!chainOk && chainOk !== null && !isLocalDemo && (
+        <div className="panel empty">
+          <p>无法连接到 {activeChain.name}（chainId {addresses.chainId}）。</p>
+          <p className="loading" style={{ marginTop: 8 }}>
+            RPC: {addresses.rpcUrl}
+            <br />
+            合约: GameTable {addresses.GameTable || "(未配置)"}
+            <br />
+            如果这是首次部署，请用 VITE_* 环境变量或 deploy:testnet 生成的
+            addresses.{addresses.chainId}.json 配置地址。
+          </p>
+        </div>
+      )}
+
+      {!chainOk && chainOk !== null && isLocalDemo && (
         <div className="panel empty">
           <p>请先启动本地链并部署：</p>
           <p className="loading" style={{ marginTop: 8 }}>
@@ -708,7 +871,41 @@ export default function App() {
         </div>
 
         <div className="sidebar">
-          <ScorePanel seats={seats.map((s) => ({ ...s, isYou: s.seat === mySeat }))} turn={turn} playing={phase === 1} />
+          <ScorePanel seats={seats.map((s) => ({ ...s, isYou: s.seat === activeSeat }))} turn={turn} playing={phase === 1} />
+
+          {!isLocalDemo && (
+            <div className="panel">
+              <h2>入座</h2>
+              {!connected && <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>先连接钱包。</p>}
+              {connected && gameId === null && (
+                <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>还没有进行中的对局，请先「新开一局」。</p>
+              )}
+              {connected && gameId !== null && (
+                <>
+                  <p style={{ fontSize: "0.82rem", color: "var(--muted)", marginTop: 0 }}>
+                    入座需要 {formatMon(JOIN_VALUE)} MON（1 MON 质押 + 2 MON 作战余额），
+                    从你自己的钱包支付。一个钱包只能占一个座位。
+                  </p>
+                  <div className="actions">
+                    {([0, 1, 2] as Seat[]).map((s) => {
+                      const occupied = Boolean(seats[s]?.address && seats[s].address !== "0x0000000000000000000000000000000000000000");
+                      const mine = seatOwningWallet(s) !== null;
+                      return (
+                        <button
+                          key={s}
+                          className={mine ? "primary" : "secondary"}
+                          disabled={busy || occupied || phase !== 0}
+                          onClick={() => joinSeatAsMe(s)}
+                        >
+                          {mine ? `你在${SEAT_LABEL_ZH[s]}` : occupied ? `${SEAT_LABEL_ZH[s]} 已满` : `入座${SEAT_LABEL_ZH[s]}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="panel">
             <h2>玩法切换</h2>
@@ -727,13 +924,24 @@ export default function App() {
               <button className="secondary" disabled={!gameId || busy} onClick={doFinalize}>
                 终局揭示
               </button>
-              <div style={{ display: "flex", gap: 6 }}>
-                {([0, 1] as Seat[]).map((s) => (
-                  <button key={s} className={mySeat === s ? "primary" : "ghost"} onClick={() => setMySeat(s)}>
-                    操控{SEAT_LABEL_ZH[s]}
-                  </button>
-                ))}
-              </div>
+              {isLocalDemo ? (
+                <div style={{ display: "flex", gap: 6 }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--muted)", alignSelf: "center" }}>
+                    本地演示：可切换视角
+                  </span>
+                  {([0, 1] as Seat[]).map((s) => (
+                    <button key={s} className={mySeat === s ? "primary" : "ghost"} onClick={() => setMySeat(s)}>
+                      视角{SEAT_LABEL_ZH[s]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+                  {iAmSeated
+                    ? `你坐在${SEAT_LABEL_ZH[activeSeat!]} · 只能操控自己这一座`
+                    : "你还没有入座 —— 在棋盘上点一个空座即可入座"}
+                </div>
+              )}
             </div>
           </div>
 
