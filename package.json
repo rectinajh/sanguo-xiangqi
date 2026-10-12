@@ -18,7 +18,8 @@
     "test": "pnpm test:shared && pnpm --filter frontend test && pnpm test:forge && pnpm size",
     "indexer": "pnpm --filter server indexer",
     "indexer:once": "pnpm --filter server indexer:once",
-    "size": "bash scripts/check-size.sh"
+    "size": "bash scripts/check-size.sh",
+    "postinstall": "pnpm build:shared"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {

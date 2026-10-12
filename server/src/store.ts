@@ -55,10 +55,21 @@ export class PgStore implements Store {
     const { default: pg } = (await import("pg")) as unknown as {
       default: { Pool: new (cfg: Record<string, unknown>) => unknown };
     };
+    // SSL 处理：
+    //   公网 Postgres 必须走 TLS。但自建实例通常用**自签证书**，
+    //   而连接串里的 `sslmode=require` 在 node-postgres 里会被当成要校验证书链，
+    //   直接报 DEPTH_ZERO_SELF_SIGNED_CERT（实测踩过）。
+    //   所以这里把 sslmode 从连接串里剥掉，改由 ssl 选项显式控制：
+    //     - sslmode=disable → 不开 TLS
+    //     - sslmode=verify-full → 校验证书链（托管服务用这个）
+    //     - 其它（require/prefer/未指定）→ 加密但不校验证书（自建实例）
+    const disableTls = /[?&]sslmode=disable/.test(connectionString);
+    const verifyFull = /[?&]sslmode=verify-full/.test(connectionString);
+    const cleanConn = connectionString.replace(/([?&])sslmode=[^&]*/g, "$1").replace(/[?&]$/, "");
+    const ssl = disableTls ? false : verifyFull ? true : { rejectUnauthorized: false };
     const pool = new pg.Pool({
-      connectionString,
-      // 公网 Postgres 必须走 TLS；托管服务（Neon/Supabase）也要求 sslmode=require。
-      ssl: connectionString.includes("sslmode=disable") ? false : { rejectUnauthorized: false },
+      connectionString: cleanConn,
+      ssl,
       max: 4, // serverless 实例多，连接池要小，否则会打满数据库的连接数上限
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 10_000,

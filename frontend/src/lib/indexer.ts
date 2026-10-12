@@ -8,7 +8,15 @@
  * 不要让用户以为这是合约直接给的数据。
  */
 
-const INDEXER_URL = (import.meta.env.VITE_INDEXER_URL ?? "http://127.0.0.1:8788").replace(/\/$/, "");
+/**
+ * 索引器基址。
+ *
+ * 本地默认指向独立进程（8788）。线上部署到 Vercel 时，索引器就是同源的
+ * `/api` 函数（见 frontend/api/index.ts），所以这里把结尾的 `/api` 归一化，
+ * 避免出现 `/api/api/health` 这种双前缀。
+ */
+const RAW_INDEXER_URL = import.meta.env.VITE_INDEXER_URL ?? "http://127.0.0.1:8788";
+const INDEXER_URL = RAW_INDEXER_URL.replace(/\/$/, "").replace(/\/api$/, "");
 
 export type IndexedSeat = {
   seat: number;
