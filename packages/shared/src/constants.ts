@@ -36,8 +36,8 @@ export const ACCUSE_SLASH_ON_AI = 4n * 10n ** 17n;
 /** @deprecated 旧 11×11；新地图用 NODE_COUNT */
 export const BOARD_W = 11;
 export const BOARD_H = 11;
-/** 三人象棋落点数（与 sanrenMap 一致；卒线外角拆点后为 142） */
-export const NODE_COUNT = 142;
+/** 三人象棋落点数（与 sanrenMap 一致；隔河全宽 r4 后为 154） */
+export const NODE_COUNT = 154;
 
 export const CLAUSE_NO_CAPTURE_ADVISOR = 1;
 export const CLAUSE_NO_EXPOSE_BEFORE_END = 2;

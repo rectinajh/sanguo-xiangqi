@@ -13,8 +13,10 @@ contract GameTableHarness is GameTable {
 
     function plantDemoBetrayalHorse(uint256 gameId) external {
         Game storage g = games[gameId];
-        uint8 horseHome = 83; // camp 2, f1, r0（142 节点图）
-        uint8 horseAt = 63;
+        // ⚠️ 这两个节点号随地图变（154 节点图：绿马在 91，能吃红士(48/50)的空点在 55/65/67/75）。
+        //    改地图后如果这里不同步，表现是背刺着法报 illegal geom。
+        uint8 horseHome = 91;
+        uint8 horseAt = 67;
         if (g.board[horseAt] != 0) return; // 已经就位，别覆盖
         g.board[horseAt] = g.board[horseHome];
         g.board[horseHome] = 0;
@@ -172,9 +174,9 @@ contract CovenantTest is Test {
         vm.expectRevert(bytes("no capture"));
         cov.challengeBetrayal(hash, sj, 1);
 
-        _move(id, keyA, 0, 72, 0, 79, 0, 7);
-        _move(id, keyB, 1, 29, 0, 36, 0, 7);
-        _move(id, keyC, 2, 63, 0, 44, 0, 4); // green horse takes red advisor
+        _move(id, keyA, 0, 72, 0, 81, 0, 7);
+        _move(id, keyB, 1, 27, 0, 36, 0, 7);
+        _move(id, keyC, 2, 67, 0, 48, 0, 4); // green horse takes red advisor
 
         (,, uint256 playBefore,,) = game.getSeat(id, si);
         vm.prank(a);
@@ -333,9 +335,9 @@ contract CovenantTest is Test {
         cov.activateCovenant{value: 0.2 ether}(p, sigA, sigC, ""); // 0.15 自己那半 + 0.05 替发起方补齐
 
         // 制造真实的"吃盟友士"证据：绿方（c）的马吃红方（a）的士
-        _move(id, keyA, 0, 72, 0, 79, 0, 7);
-        _move(id, keyB, 1, 29, 0, 36, 0, 7);
-        _move(id, keyC, 2, 63, 0, 44, 0, 4); // green horse takes red advisor
+        _move(id, keyA, 0, 72, 0, 81, 0, 7);
+        _move(id, keyB, 1, 27, 0, 36, 0, 7);
+        _move(id, keyC, 2, 67, 0, 48, 0, 4); // green horse takes red advisor
 
         // 记录角色：seatI/seatJ 由 actualSeats 反推，preimage 里 seatI 对应签名里的 a
         // 合约契约：proposer = 锁诚意金的人（c）；counterparty = 另一方（a）。

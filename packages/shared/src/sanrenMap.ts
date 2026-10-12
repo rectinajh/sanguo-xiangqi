@@ -59,6 +59,11 @@ export const GEOM = {
   inner: 0.785,
   cross: 0.8,
   whiskerX: 1,
+  /**
+   * 每营横向收缩系数（相对标准 f0–f8 全宽）。
+   * <1 会在邻营之间留出「河」缝，避免卒线外角贴死/叠子。
+   */
+  fileScale: 0.72,
 };
 
 const SQ3 = Math.sqrt(3);
@@ -83,7 +88,6 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
   const a = (9 + yF1 * yF1 - g.h3 * g.h3) / (2 * g.h3 - 2 * yF1);
   const radius = (r: number) => g.h3 + a + (3 - r) * g.s;
   const arcY = (x: number, r: number) => -a + Math.sqrt(radius(r) ** 2 - x * x);
-  const pCorner: [number, number] = [-4, 4 / SQ3];
 
   const nodes: MapNode[] = [];
   const byKey = new Map<string, number>();
@@ -104,20 +108,15 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
   const cz = (name: string) => byKey.get(`z:${name}`)!;
 
   const localPoint = (f: number, r: number): [number, number] => {
-    // 卒线外角：各营独立落点（略向营内收），避免与邻营共点，以便五兵隔位摆 0/2/4/6/8
-    if (r === 3 && (f === 0 || f === 8)) {
-      const baseX = f === 0 ? pCorner[0] : -pCorner[0];
-      const pull = f === 0 ? 0.28 : -0.28;
-      return [baseX + pull, pCorner[1]];
-    }
-    const x = f - 4;
+    // 横向收窄：三营之间留河缝；不再用外角共点几何（pCorner）
+    const x = (f - 4) * g.fileScale;
     return [x, arcY(x, r)];
   };
 
   for (const c of [CAMP_BLACK, CAMP_RED, CAMP_GREEN]) {
     for (let r = 0; r <= 4; r++) {
       for (let f = 0; f <= 8; f++) {
-        if (r === 4 && (f < 2 || f > 6)) continue;
+        // r4 覆盖全宽：隔位兵在 f0/f8 也能向河沿（朝中宫）进一步
         add(`${c}:${f}:${r}`, rot(localPoint(f, r), CAMP_ANGLE[c]), c, f, r);
       }
     }
@@ -169,57 +168,29 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
       for (let i = 0; i < 8; i++) seg(ids[i], ids[i + 1], arcAbout(c, radius(r)));
       lines.push({ name: `${c}:r${r}`, nodes: ids });
     }
-    const r4 = [2, 3, 4, 5, 6].map((f) => cn(c, f, 4));
-    for (let i = 0; i < 4; i++) seg(r4[i], r4[i + 1], arcAbout(c, radius(4)));
+    const r4 = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((f) => cn(c, f, 4));
+    for (let i = 0; i < 8; i++) seg(r4[i], r4[i + 1], arcAbout(c, radius(4)));
     lines.push({ name: `${c}:r4`, nodes: r4 });
 
-    const r3 = [1, 2, 3, 4, 5, 6, 7].map((f) => cn(c, f, 3));
-    for (let i = 0; i < 6; i++) seg(r3[i], r3[i + 1], arcAbout(c, radius(3)));
-    seg(cn(c, 0, 3), r3[0]);
-    seg(r3[6], cn(c, 8, 3));
-    // 邻营卒线外角已拆点：用短边桥接，保持外环可走
-    seg(cn(p, 8, 3), cn(c, 0, 3));
-    seg(cn(c, 8, 3), cn(nx, 0, 3));
-    lines.push({
-      name: `${c}:r3`,
-      nodes: [
-        cn(p, 8, 0),
-        cn(p, 8, 1),
-        cn(p, 8, 2),
-        cn(p, 8, 3),
-        cn(c, 0, 3),
-        ...r3,
-        cn(c, 8, 3),
-        cn(nx, 0, 3),
-        cn(nx, 0, 2),
-        cn(nx, 0, 1),
-        cn(nx, 0, 0),
-      ],
-    });
+    // 卒线只连本营，不与邻营外角拼接 —— 营间是「河」，过河走中宫
+    const r3 = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((f) => cn(c, f, 3));
+    for (let i = 0; i < 8; i++) seg(r3[i], r3[i + 1], arcAbout(c, radius(3)));
+    lines.push({ name: `${c}:r3`, nodes: r3 });
 
     for (let f = 0; f <= 8; f++) {
-      const top = f >= 2 && f <= 6 ? 4 : 3;
       const ids = [];
-      for (let r = 0; r <= top; r++) ids.push(cn(c, f, r));
+      for (let r = 0; r <= 4; r++) ids.push(cn(c, f, r));
       for (let i = 0; i < ids.length - 1; i++) seg(ids[i], ids[i + 1]);
-      if (f >= 2 && f <= 6) {
-        if (f === 4) {
-          const ext = [cz(`G${c}`), cz(`X${c}`), cz("C")];
-          seg(ids[ids.length - 1], ext[0]);
-          seg(ext[0], ext[1]);
-          seg(ext[1], ext[2]);
-          ids.push(...ext);
-        }
-        lines.push({ name: `${c}:f${f}`, nodes: ids });
+      if (f === 4) {
+        const ext = [cz(`G${c}`), cz(`X${c}`), cz("C")];
+        seg(ids[ids.length - 1], ext[0]);
+        seg(ext[0], ext[1]);
+        seg(ext[1], ext[2]);
+        ids.push(...ext);
       }
+      // 边线文件也记入纵线，便于车炮沿线计步
+      lines.push({ name: `${c}:f${f}`, nodes: ids });
     }
-
-    const bend = rot([-3, SQ3], t);
-    seg(cn(c, 1, 3), cn(p, 7, 3), { type: "via", points: [bend] });
-    lines.push({
-      name: `${c}:f1|${p}:f7`,
-      nodes: [0, 1, 2, 3].map((r) => cn(c, 1, r)).concat([3, 2, 1, 0].map((r) => cn(p, 7, r))),
-    });
 
     const d1 = [cn(c, 3, 0), cn(c, 4, 1), cn(c, 5, 2)];
     const d2 = [cn(c, 5, 0), cn(c, 4, 1), cn(c, 3, 2)];

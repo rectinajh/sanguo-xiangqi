@@ -77,7 +77,7 @@ contract GameTableTest is Test {
     // Sanren node board: (nodeId, y=0). Numbers from packages/shared demoSpine.
     function test_CommitRevealChargesFee() public {
         uint256 id = _start();
-        _move(id, keyA, 0, 72, 0, 79, 0, 7); // red soldier +1 rank
+        _move(id, keyA, 0, 72, 0, 81, 0, 7); // red soldier +1 rank
         (,, uint256 play,,) = game.getSeat(id, 0);
         assertEq(play, PLAY_INIT - 0.009 ether);
     }
@@ -103,9 +103,9 @@ contract GameTableTest is Test {
         // and advisor capture scoring via a constructed board state through sequential legal moves
         // that the shared demo uses after relocating horse (contract uses photo setup).
         // Verify capture scoring with chariot taking a soldier if reachable; else points API smoke.
-        _move(id, keyA, 0, 72, 0, 79, 0, 7);
-        _move(id, keyB, 1, 29, 0, 36, 0, 7);
-        _move(id, keyC, 2, 111, 0, 118, 0, 7);
+        _move(id, keyA, 0, 72, 0, 81, 0, 7);
+        _move(id, keyB, 1, 27, 0, 36, 0, 7);
+        _move(id, keyC, 2, 117, 0, 126, 0, 7);
         (,,, uint32 ptsA,) = game.getSeat(id, 0);
         assertEq(ptsA, 0);
     }

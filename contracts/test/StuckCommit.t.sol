@@ -110,9 +110,9 @@ contract StuckCommitTest is Test {
     function test_NoPendingAfterNormalMove() public {
         uint256 id = _start();
         bytes32 salt = keccak256("s");
-        bytes32 ch = keccak256(abi.encode(uint8(0), uint8(72), uint8(0), uint8(79), uint8(0), uint8(7), salt));
+        bytes32 ch = keccak256(abi.encode(uint8(0), uint8(72), uint8(0), uint8(81), uint8(0), uint8(7), salt));
         vm.prank(a);
-        game.commitAndRevealMove(id, 72, 0, 79, 0, 7, salt, ch);
+        game.commitAndRevealMove(id, 72, 0, 81, 0, 7, salt, ch);
         (bool pending,,) = game.pendingCommitOf(id);
         assertFalse(pending, "no pending after a normal move");
     }

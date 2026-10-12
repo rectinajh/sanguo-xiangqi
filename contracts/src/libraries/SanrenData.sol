@@ -6,181 +6,179 @@ pragma solidity ^0.8.24;
 /// 紧凑常量表版。旧版把节点对展开成 if 链，让 GameTable 达到 146 KB
 /// （EIP-170 上限 24,576 B）而无法部署；这里全部改为查表。
 library SanrenData {
-    uint8 internal constant NODE_COUNT = 142;
+    uint8 internal constant NODE_COUNT = 154;
     uint8 internal constant CAMP_NONE = 3;
     uint8 internal constant EMPTY_SLOT = 255;
-    uint8 internal constant MAX_LINE = 17;
-    uint16 internal constant LINE_COUNT = 48;
-    uint16 internal constant HORSE_COUNT = 669;
+    uint8 internal constant MAX_LINE = 9;
+    uint16 internal constant LINE_COUNT = 57;
+    uint16 internal constant HORSE_COUNT = 717;
     uint8 internal constant MAX_MEMBERS = 4;
 
-    /// 每条线的节点列表，每行 MAX_LINE 个（816 字节，pad=0，26 块）
-    bytes32 internal constant LINE_NODES_0 = 0x000102030405060708ffffffffffffffff090a0b0c0d0e0f1011ffffffffffff;
-    bytes32 internal constant LINE_NODES_1 = 0xffff12131415161718191affffffffffffffff2425262728ffffffffffffffff;
-    bytes32 internal constant LINE_NODES_2 = 0xffffffff313a434c1b1c1d1e1f202122236d645b52020b141d24ffffffffffff;
-    bytes32 internal constant LINE_NODES_3 = 0xffffffffffff030c151e25ffffffffffffffffffffffff040d161f267c7d7bff;
-    bytes32 internal constant LINE_NODES_4 = 0xffffffffffffffff050e172027ffffffffffffffffffffffff060f182128ffff;
-    bytes32 internal constant LINE_NODES_5 = 0xffffffffffffffffffff010a131c4b423930ffffffffffffffffff030d17ffff;
-    bytes32 internal constant LINE_NODES_6 = 0xffffffffffffffffffffffff050d15ffffffffffffffffffffffffffff7e807c;
-    bytes32 internal constant LINE_NODES_7 = 0x818affffffffffffffffffffffff7c7f82ffffffffffffffffffffffffffff29;
-    bytes32 internal constant LINE_NODES_8 = 0x2a2b2c2d2e2f3031ffffffffffffffff32333435363738393affffffffffffff;
-    bytes32 internal constant LINE_NODES_9 = 0xff3b3c3d3e3f40414243ffffffffffffffff4d4e4f5051ffffffffffffffffff;
-    bytes32 internal constant LINE_NODES_10 = 0xffffff5a636c754445464748494a4b4c1b1209002b343d464dffffffffffffff;
-    bytes32 internal constant LINE_NODES_11 = 0xffffffffff2c353e474effffffffffffffffffffffff2d363f484f82837bffff;
-    bytes32 internal constant LINE_NODES_12 = 0xffffffffffffff2e37404950ffffffffffffffffffffffff2f38414a51ffffff;
-    bytes32 internal constant LINE_NODES_13 = 0xffffffffffffffffff2a333c45746b6259ffffffffffffffffff2c3640ffffff;
-    bytes32 internal constant LINE_NODES_14 = 0xffffffffffffffffffffff2e363effffffffffffffffffffffffffff84868287;
-    bytes32 internal constant LINE_NODES_15 = 0x7effffffffffffffffffffffff828588ffffffffffffffffffffffffffff5253;
-    bytes32 internal constant LINE_NODES_16 = 0x5455565758595affffffffffffffff5b5c5d5e5f60616263ffffffffffffffff;
-    bytes32 internal constant LINE_NODES_17 = 0x6465666768696a6b6cffffffffffffffff767778797affffffffffffffffffff;
-    bytes32 internal constant LINE_NODES_18 = 0xffff08111a236d6e6f707172737475443b3229545d666f76ffffffffffffffff;
-    bytes32 internal constant LINE_NODES_19 = 0xffffffff555e677077ffffffffffffffffffffffff565f68717888897bffffff;
-    bytes32 internal constant LINE_NODES_20 = 0xffffffffffff5760697279ffffffffffffffffffffffff58616a737affffffff;
-    bytes32 internal constant LINE_NODES_21 = 0xffffffffffffffff535c656e22191007ffffffffffffffffff555f69ffffffff;
-    bytes32 internal constant LINE_NODES_22 = 0xffffffffffffffffffff575f67ffffffffffffffffffffffffffff8a8c888d84;
-    bytes32 internal constant LINE_NODES_23 = 0xffffffffffffffffffffffff888b7cffffffffffffffffffffffffffff8c8b7d;
-    bytes32 internal constant LINE_NODES_24 = 0x7f87ffffffffffffffffffffffff807f83858dffffffffffffffffffffffff86;
-    bytes32 internal constant LINE_NODES_25 = 0x85898b81ffffffffffffffffffffffff00000000000000000000000000000000;
+    /// 每条线的节点列表，每行 MAX_LINE 个（513 字节，pad=1，17 块）
+    bytes32 internal constant LINE_NODES_0 = 0x00000102030405060708090a0b0c0d0e0f101112131415161718191a24252627;
+    bytes32 internal constant LINE_NODES_1 = 0x28292a2b2c1b1c1d1e1f202122230009121b24ffffffff010a131c25ffffffff;
+    bytes32 internal constant LINE_NODES_2 = 0x020b141d26ffffffff030c151e27ffffffff040d161f28888987ff050e172029;
+    bytes32 internal constant LINE_NODES_3 = 0xffffffff060f18212affffffff071019222bffffffff08111a232cffffffff03;
+    bytes32 internal constant LINE_NODES_4 = 0x0d17ffffffffffff050d15ffffffffffff8a8c888d96ffffffff888b8effffff;
+    bytes32 internal constant LINE_NODES_5 = 0xffffff2d2e2f303132333435363738393a3b3c3d3e3f40414243444546475152;
+    bytes32 internal constant LINE_NODES_6 = 0x5354555657585948494a4b4c4d4e4f502d363f4851ffffffff2e37404952ffff;
+    bytes32 internal constant LINE_NODES_7 = 0xffff2f38414a53ffffffff3039424b54ffffffff313a434c558e8f87ff323b44;
+    bytes32 internal constant LINE_NODES_8 = 0x4d56ffffffff333c454e57ffffffff343d464f58ffffffff353e475059ffffff;
+    bytes32 internal constant LINE_NODES_9 = 0xff303a44ffffffffffff323a42ffffffffffff90928e938affffffff8e9194ff;
+    bytes32 internal constant LINE_NODES_10 = 0xffffffffff5a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374;
+    bytes32 internal constant LINE_NODES_11 = 0x7e7f8081828384858675767778797a7b7c7d5a636c757effffffff5b646d767f;
+    bytes32 internal constant LINE_NODES_12 = 0xffffffff5c656e7780ffffffff5d666f7881ffffffff5e67707982949587ff5f;
+    bytes32 internal constant LINE_NODES_13 = 0x68717a83ffffffff6069727b84ffffffff616a737c85ffffffff626b747d86ff;
+    bytes32 internal constant LINE_NODES_14 = 0xffffff5d6771ffffffffffff5f676fffffffffffff9698949990ffffffff9497;
+    bytes32 internal constant LINE_NODES_15 = 0x88ffffffffffff9897898b93ffffffff8c8b8f9199ffffffff929195978dffff;
+    bytes32 internal constant LINE_NODES_16 = 0xffff000000000000000000000000000000000000000000000000000000000000;
 
-    /// 每条线的实际长度（48 字节，pad=0，2 块）
-    bytes32 internal constant LINE_LEN_0 = 0x0909090511050508050508030305030909090511050508050508030305030909;
-    bytes32 internal constant LINE_LEN_1 = 0x0905110505080505080303050305050500000000000000000000000000000000;
+    /// 每条线的实际长度（57 字节，pad=1，2 块）
+    bytes32 internal constant LINE_LEN_0 = 0x0009090909090505050508050505050303050309090909090505050508050505;
+    bytes32 internal constant LINE_LEN_1 = 0x0503030503090909090905050505080505050503030503050505000000000000;
 
-    /// 每个节点所属的线数（142 字节，pad=0，5 块）
+    /// 每个节点所属的线数（154 字节，pad=0，5 块）
     bytes32 internal constant MEMBER_COUNT_0 = 0x0202020302030202020202020204020202020202020302030202020202020202;
-    bytes32 internal constant MEMBER_COUNT_1 = 0x0202020202020202020202020302030202020202020204020202020202020302;
-    bytes32 internal constant MEMBER_COUNT_2 = 0x0302020202020202020202020202020202020202020302030202020202020204;
-    bytes32 internal constant MEMBER_COUNT_3 = 0x0202020202020203020302020202020202020202020202020202020304020203;
-    bytes32 internal constant MEMBER_COUNT_4 = 0x0202040202030202040202030202000000000000000000000000000000000000;
+    bytes32 internal constant MEMBER_COUNT_1 = 0x0202020202020202020202020202020203020302020202020202040202020202;
+    bytes32 internal constant MEMBER_COUNT_2 = 0x0202030203020202020202020202020202020202020202020202020202030203;
+    bytes32 internal constant MEMBER_COUNT_3 = 0x0202020202020204020202020202020302030202020202020202020202020202;
+    bytes32 internal constant MEMBER_COUNT_4 = 0x0202020202020203040202030202040202030202040202030202000000000000;
 
-    /// memberPairs 的每节点起始偏移（uint16 大端，140 个）（286 字节，pad=0，9 块）
+    /// memberPairs 的每节点起始偏移（uint16 大端，140 个）（310 字节，pad=0，10 块）
     bytes32 internal constant MEMBER_OFFSET_0 = 0x000000040008000c00120016001c002000240028002c00300034003800400044;
     bytes32 internal constant MEMBER_OFFSET_1 = 0x0048004c005000540058005c00620066006c007000740078007c008000840088;
-    bytes32 internal constant MEMBER_OFFSET_2 = 0x008c009000940098009c00a000a400a800ac00b000b400b800bc00c200c600cc;
-    bytes32 internal constant MEMBER_OFFSET_3 = 0x00d000d400d800dc00e000e400e800f000f400f800fc010001040108010c0112;
-    bytes32 internal constant MEMBER_OFFSET_4 = 0x0116011c012001240128012c013001340138013c014001440148014c01500154;
-    bytes32 internal constant MEMBER_OFFSET_5 = 0x0158015c016001640168016c01720176017c018001840188018c019001940198;
-    bytes32 internal constant MEMBER_OFFSET_6 = 0x01a001a401a801ac01b001b401b801bc01c201c601cc01d001d401d801dc01e0;
-    bytes32 internal constant MEMBER_OFFSET_7 = 0x01e401e801ec01f001f401f801fc020002040208020c02100216021e02220226;
-    bytes32 internal constant MEMBER_OFFSET_8 = 0x022c02300234023c02400244024a024e0252025a025e02620268026c02700000;
+    bytes32 internal constant MEMBER_OFFSET_2 = 0x008c009000940098009c00a000a400a800ac00b000b400b800bc00c000c400c8;
+    bytes32 internal constant MEMBER_OFFSET_3 = 0x00cc00d200d600dc00e000e400e800ec00f000f400f8010001040108010c0110;
+    bytes32 internal constant MEMBER_OFFSET_4 = 0x01140118011c01220126012c013001340138013c014001440148014c01500154;
+    bytes32 internal constant MEMBER_OFFSET_5 = 0x0158015c016001640168016c017001740178017c018001840188018c01920196;
+    bytes32 internal constant MEMBER_OFFSET_6 = 0x019c01a001a401a801ac01b001b401b801c001c401c801cc01d001d401d801dc;
+    bytes32 internal constant MEMBER_OFFSET_7 = 0x01e201e601ec01f001f401f801fc020002040208020c021002140218021c0220;
+    bytes32 internal constant MEMBER_OFFSET_8 = 0x02240228022c023002340238023c02400246024e02520256025c02600264026c;
+    bytes32 internal constant MEMBER_OFFSET_9 = 0x02700274027a027e0282028a028e02920298029c02a000000000000000000000;
 
-    /// 节点所属 (线号,位次) 紧凑排列（624 字节，pad=0，20 块）
-    bytes32 internal constant MEMBER_PAIRS_0 = 0x0000131000010a0000020500000306000b0000040700000508000c0000060900;
-    bytes32 internal constant MEMBER_PAIRS_1 = 0x00072807000822000100130f01010a010102050101030601010407010b010c01;
-    bytes32 internal constant MEMBER_PAIRS_2 = 0x010508010106090101072806010822010200130e02010a020202050202030602;
-    bytes32 internal constant MEMBER_PAIRS_3 = 0x0c0202040702020508020b020206090202072805020822020404130d04050a03;
-    bytes32 internal constant MEMBER_PAIRS_4 = 0x04060503040706030408070304090803040a0903040b2804040c220303000504;
-    bytes32 internal constant MEMBER_PAIRS_5 = 0x030106040302070403030804030409040f0022100f0119000f0214000f031500;
-    bytes32 internal constant MEMBER_PAIRS_6 = 0x1a000f0416000f0517001b000f0618000a070f0704000f081000220f10011901;
-    bytes32 internal constant MEMBER_PAIRS_7 = 0x1002140110031501100416011a011b0110051701100618010a06100704011008;
-    bytes32 internal constant MEMBER_PAIRS_8 = 0x1100220e1101190211021402110315021b0211041602110517021a0211061802;
-    bytes32 internal constant MEMBER_PAIRS_9 = 0x0a051107040211081304220d1305190313061403130715031308160313091703;
-    bytes32 internal constant MEMBER_PAIRS_10 = 0x130a18030a04130b0403130c1200140412011504120216041203170412041804;
-    bytes32 internal constant MEMBER_PAIRS_11 = 0x04101e001e0128001e0223001e03240029001e0425001e0526002a001e062700;
-    bytes32 internal constant MEMBER_PAIRS_12 = 0x19071e0713001e08040f1f001f0128011f0223011f0324011f04250129012a01;
-    bytes32 internal constant MEMBER_PAIRS_13 = 0x1f0526011f06270119061f0713011f08040e2000200128022002230220032402;
-    bytes32 internal constant MEMBER_PAIRS_14 = 0x2a0220042502200526022902200627021905200713022008040d220422052803;
-    bytes32 internal constant MEMBER_PAIRS_15 = 0x22062303220724032208250322092603220a27031904220b1303220c21002304;
-    bytes32 internal constant MEMBER_PAIRS_16 = 0x2101240421022504210326042104270407071607250707050d020e002c020706;
-    bytes32 internal constant MEMBER_PAIRS_17 = 0x2d020d001c040e012d032e010d012e000d032f040e0216051c021d0016062e02;
-    bytes32 internal constant MEMBER_PAIRS_18 = 0x1c002b041d012e032f011c012f001c032d041d0225052b022c0025062f020d04;
-    bytes32 internal constant MEMBER_PAIRS_19 = 0x2b002c012d012f032b012d002b032e0400000000000000000000000000000000;
+    /// 节点所属 (线号,位次) 紧凑排列（672 字节，pad=0，21 块）
+    bytes32 internal constant MEMBER_PAIRS_0 = 0x000005000001060000020700000308000e000004090000050a000f0000060b00;
+    bytes32 internal constant MEMBER_PAIRS_1 = 0x00070c0000080d0001000501010106010102070101030801010409010e010f01;
+    bytes32 internal constant MEMBER_PAIRS_2 = 0x01050a0101060b0101070c0101080d0102000502020106020202070202030802;
+    bytes32 internal constant MEMBER_PAIRS_3 = 0x0f020204090202050a020e0202060b0202070c0202080d020400050304010603;
+    bytes32 internal constant MEMBER_PAIRS_4 = 0x04020703040308030404090304050a0304060b0304070c0304080d0303000504;
+    bytes32 internal constant MEMBER_PAIRS_5 = 0x0301060403020704030308040304090403050a0403060b0403070c0403080d04;
+    bytes32 internal constant MEMBER_PAIRS_6 = 0x12001700120118001202190012031a00200012041b0012051c00210012061d00;
+    bytes32 internal constant MEMBER_PAIRS_7 = 0x12071e0012081f0013001701130118011302190113031a0113041b0120012101;
+    bytes32 internal constant MEMBER_PAIRS_8 = 0x13051c0113061d0113071e0113081f0114001702140118021402190214031a02;
+    bytes32 internal constant MEMBER_PAIRS_9 = 0x210214041b0214051c02200214061d0214071e0214081f021600170316011803;
+    bytes32 internal constant MEMBER_PAIRS_10 = 0x1602190316031a0316041b0316051c0316061d0316071e0316081f0315001704;
+    bytes32 internal constant MEMBER_PAIRS_11 = 0x150118041502190415031a0415041b0415051c0415061d0415071e0415081f04;
+    bytes32 internal constant MEMBER_PAIRS_12 = 0x2400290024012a0024022b0024032c00320024042d0024052e00330024062f00;
+    bytes32 internal constant MEMBER_PAIRS_13 = 0x24073000240831002500290125012a0125022b0125032c0125042d0132013301;
+    bytes32 internal constant MEMBER_PAIRS_14 = 0x25052e0125062f0125073001250831012600290226012a0226022b0226032c02;
+    bytes32 internal constant MEMBER_PAIRS_15 = 0x330226042d0226052e02320226062f0226073002260831022800290328012a03;
+    bytes32 internal constant MEMBER_PAIRS_16 = 0x28022b0328032c0328042d0328052e0328062f03280730032808310327002904;
+    bytes32 internal constant MEMBER_PAIRS_17 = 0x27012a0427022b0427032c0427042d0427052e0427062f042707300427083104;
+    bytes32 internal constant MEMBER_PAIRS_18 = 0x09071b072d070905100211003502090636021000220411013603370110013700;
+    bytes32 internal constant MEMBER_PAIRS_19 = 0x1003380411021b05220223001b06370222003404230137033801220138002203;
+    bytes32 internal constant MEMBER_PAIRS_20 = 0x360423022d05340235002d063802100434003501360138033401360034033704;
 
-    /// 节点所属营地（142 字节，pad=0，5 块）
+    /// 节点所属营地（154 字节，pad=0，5 块）
     bytes32 internal constant NODE_CAMP_0 = 0x0101010101010101010101010101010101010101010101010101010101010101;
-    bytes32 internal constant NODE_CAMP_1 = 0x0101010101010101010000000000000000000000000000000000000000000000;
-    bytes32 internal constant NODE_CAMP_2 = 0x0000000000000000000000000000000000000202020202020202020202020202;
-    bytes32 internal constant NODE_CAMP_3 = 0x0202020202020202020202020202020202020202020202020202020303030303;
-    bytes32 internal constant NODE_CAMP_4 = 0x0303030303030303030303030303000000000000000000000000000000000000;
+    bytes32 internal constant NODE_CAMP_1 = 0x0101010101010101010101010100000000000000000000000000000000000000;
+    bytes32 internal constant NODE_CAMP_2 = 0x0000000000000000000000000000000000000000000000000000020202020202;
+    bytes32 internal constant NODE_CAMP_3 = 0x0202020202020202020202020202020202020202020202020202020202020202;
+    bytes32 internal constant NODE_CAMP_4 = 0x0202020202020203030303030303030303030303030303030303000000000000;
 
-    /// 节点在本营的 f 坐标（142 字节，pad=0，5 块）
+    /// 节点在本营的 f 坐标（154 字节，pad=0，5 块）
     bytes32 internal constant CAMP_F_0 = 0x0001020304050607080001020304050607080001020304050607080001020304;
-    bytes32 internal constant CAMP_F_1 = 0x0506070802030405060001020304050607080001020304050607080001020304;
-    bytes32 internal constant CAMP_F_2 = 0x0506070800010203040506070802030405060001020304050607080001020304;
-    bytes32 internal constant CAMP_F_3 = 0x050607080001020304050607080001020304050607080203040506ffffffffff;
-    bytes32 internal constant CAMP_F_4 = 0xffffffffffffffffffffffffffff000000000000000000000000000000000000;
+    bytes32 internal constant CAMP_F_1 = 0x0506070800010203040506070800010203040506070800010203040506070800;
+    bytes32 internal constant CAMP_F_2 = 0x0102030405060708000102030405060708000102030405060708000102030405;
+    bytes32 internal constant CAMP_F_3 = 0x0607080001020304050607080001020304050607080001020304050607080001;
+    bytes32 internal constant CAMP_F_4 = 0x02030405060708ffffffffffffffffffffffffffffffffffffff000000000000;
 
-    /// 节点在本营的 r 坐标（142 字节，pad=0，5 块）
+    /// 节点在本营的 r 坐标（154 字节，pad=0，5 块）
     bytes32 internal constant CAMP_R_0 = 0x0000000000000000000101010101010101010202020202020202020303030303;
-    bytes32 internal constant CAMP_R_1 = 0x0303030304040404040000000000000000000101010101010101010202020202;
-    bytes32 internal constant CAMP_R_2 = 0x0202020203030303030303030304040404040000000000000000000101010101;
-    bytes32 internal constant CAMP_R_3 = 0x010101010202020202020202020303030303030303030404040404ffffffffff;
-    bytes32 internal constant CAMP_R_4 = 0xffffffffffffffffffffffffffff000000000000000000000000000000000000;
+    bytes32 internal constant CAMP_R_1 = 0x0303030304040404040404040400000000000000000001010101010101010102;
+    bytes32 internal constant CAMP_R_2 = 0x0202020202020202030303030303030303040404040404040404000000000000;
+    bytes32 internal constant CAMP_R_3 = 0x0000000101010101010101010202020202020202020303030303030303030404;
+    bytes32 internal constant CAMP_R_4 = 0x04040404040404ffffffffffffffffffffffffffffffffffffff000000000000;
 
-    /// 九宫成员位图（三营地各一层）（54 字节，pad=0，2 块）
-    bytes32 internal constant PALACE_BITS_0 = 0x000000000070e0c0010000000000000000003870e00000000000000000000000;
-    bytes32 internal constant PALACE_BITS_1 = 0x0000000000000000000000000000e0c081030000000000000000000000000000;
+    /// 九宫成员位图（三营地各一层）（60 字节，pad=0，2 块）
+    bytes32 internal constant PALACE_BITS_0 = 0x000000000000070e1c00000000000000000000003870e0000000000000000000;
+    bytes32 internal constant PALACE_BITS_1 = 0x00000000000000000000000000000000000000e0c08103000000000000000000;
 
-    /// 本营成员位图（三营地各一层）（54 字节，pad=0，2 块）
-    bytes32 internal constant CAMP_BITS_0 = 0x0000000000feffffffff0300000000000000ffffffffff010000000000000000;
-    bytes32 internal constant CAMP_BITS_1 = 0x0000000000000000000000000000fcffffffff07000000000000000000000000;
+    /// 本营成员位图（三营地各一层）（60 字节，pad=0，2 块）
+    bytes32 internal constant CAMP_BITS_0 = 0x0000000000e0ffffffffff030000000000000000ffffffffff1f000000000000;
+    bytes32 internal constant CAMP_BITS_1 = 0x00000000000000000000000000000000000000fcffffffff7f00000000000000;
 
-    /// 马着法 key（uint16 大端），升序（1338 字节，pad=0，42 块）
-    bytes32 internal constant HORSE_KEY_0 = 0x000b0013009a00a000a201210125012f013101b401b801be01c002430247024d;
-    bytes32 internal constant HORSE_KEY_1 = 0x024f02d202d602dc02de03570365036b036d03f003fa03fc047f048905000512;
-    bytes32 internal constant HORSE_KEY_2 = 0x051a058f05a105a705a9061a061e062c06300636063806a906ad06bb06bf06c5;
-    bytes32 internal constant HORSE_KEY_3 = 0x06c70738073c07410745074a074e0753075407550756075707c707cb07d907dd;
-    bytes32 internal constant HORSE_KEY_4 = 0x07e307e50856085a0868086c0872087408e508f70901090309740986099009fd;
-    bytes32 internal constant HORSE_KEY_5 = 0x0a070a190a470a8a0a8c0a960aa80ad60b190b1b0b210b2f0b330b370b3d0ba8;
-    bytes32 internal constant HORSE_KEY_6 = 0x0baa0bb00bb40bc20bc60bca0bcc0c370c390c3f0c430c510c550c590c5b0cc6;
-    bytes32 internal constant HORSE_KEY_7 = 0x0cc80cce0cd20ce00ce40ce80cea0d550d570d610d650d6f0d730d770de40de6;
-    bytes32 internal constant HORSE_KEY_8 = 0x0dec0dfe0e4b0e730e7b0e8d0eda0f040f0e0f3c0f910f930f9d0fad0fc90fcb;
-    bytes32 internal constant HORSE_KEY_9 = 0x102010221028102c103c106210a710af10b710bb10cb113e11401146114a1156;
-    bytes32 internal constant HORSE_KEY_10 = 0x115a11c511cf11d511d911e5125c125e12641268127412bb12eb12ed12f31303;
-    bytes32 internal constant HORSE_KEY_11 = 0x13401342137a138213cf140b140d1417149a149c14a61529152b1531153515b8;
-    bytes32 internal constant HORSE_KEY_12 = 0x15ba15c016471649164f16f216fa1781178717891808180c18161818189b189f;
-    bytes32 internal constant HORSE_KEY_13 = 0x18a518a7192a192e1934193619b919bd19c319c51a3e1a4c1a521a541ad71ae1;
-    bytes32 internal constant HORSE_KEY_14 = 0x1ae31b661b701be71bf91c011c761c881c8e1c901d011d051d131d171d1d1d1f;
-    bytes32 internal constant HORSE_KEY_15 = 0x1d901d941da21da61dac1dae1e1f1e231e281e2c1e311e351e3a1e3b1e3c1e3d;
-    bytes32 internal constant HORSE_KEY_16 = 0x1e3e1eae1eb21ec01ec41eca1ecc1f3d1f411f4f1f531f591f5b1fcc1fde1fe8;
-    bytes32 internal constant HORSE_KEY_17 = 0x1fea205b206d207720e420ee2100212e21712173217d218f21bd220022022208;
-    bytes32 internal constant HORSE_KEY_18 = 0x2216221a221e2224228f22912297229b22a922ad22b122b3231e23202326232a;
-    bytes32 internal constant HORSE_KEY_19 = 0x2338233c2340234223ad23af23b523b923c723cb23cf23d1243c243e2448244c;
-    bytes32 internal constant HORSE_KEY_20 = 0x2456245a245e24b724cb24cd24d324e52546255a2562257425eb25f526232678;
-    bytes32 internal constant HORSE_KEY_21 = 0x267a2684269426b026b227072709270f271327232749278e2796279e27a227b2;
-    bytes32 internal constant HORSE_KEY_22 = 0x28252827282d2831283d284128ac28b628bc28c028cc292729432945294b294f;
-    bytes32 internal constant HORSE_KEY_23 = 0x295b29ac29ae29d229d429da29ea2a3b2a612a692af22af42afe2b812b832b8d;
-    bytes32 internal constant HORSE_KEY_24 = 0x2c102c122c182c1c2c9f2ca12ca72d2e2d302d362dd92de12e682e6e2e702eef;
-    bytes32 internal constant HORSE_KEY_25 = 0x2ef32efd2eff2f822f862f8c2f8e30113015301b301d30a030a430aa30ac3125;
-    bytes32 internal constant HORSE_KEY_26 = 0x31333139313b31be31c831ca324d325732ce32e032e8335d336f3375337733e8;
-    bytes32 internal constant HORSE_KEY_27 = 0x33ec33fa33fe340434063477347b3489348d349334953506350a350f35133518;
-    bytes32 internal constant HORSE_KEY_28 = 0x351c352135223523352435253595359935a735ab35b135b3362436283636363a;
-    bytes32 internal constant HORSE_KEY_29 = 0x3640364236b336c536cf36d137423754375e379a37cb37d537e738293858385a;
-    bytes32 internal constant HORSE_KEY_30 = 0x3864387638e738e938ef38fd39013905390b39763978397e3982399039943998;
-    bytes32 internal constant HORSE_KEY_31 = 0x399a3a053a073a0d3a113a1f3a233a273a293a943a963a9c3aa03aae3ab23ab6;
-    bytes32 internal constant HORSE_KEY_32 = 0x3ab83b233b253b2f3b333b3d3b413b453b9e3bb23bb43bba3bcc3c2d3c413c49;
-    bytes32 internal constant HORSE_KEY_33 = 0x3c5b3c8f3cd23cdc3d1c3d1e3d5f3d613d6b3d7b3db53dee3df03df63dfa3e0a;
-    bytes32 internal constant HORSE_KEY_34 = 0x3e753e7d3e853e893e993f0c3f0e3f143f183f243f283f933f9d3fa33fa73fb3;
-    bytes32 internal constant HORSE_KEY_35 = 0x400e402a402c4032403640424093409540b940bb40c140d141224148415041d9;
-    bytes32 internal constant HORSE_KEY_36 = 0x41db41e54268426a427442f742f942ff430343864388438e44154417441d44ba;
-    bytes32 internal constant HORSE_KEY_37 = 0x44bb44c044c144c644c744e644e845434546454b454d454f45514552455445d4;
-    bytes32 internal constant HORSE_KEY_38 = 0x45db45e04661466746f346f846fb477b4785478b4809480d4813486348654897;
-    bytes32 internal constant HORSE_KEY_39 = 0x4899489a489c48a048a548a748a94928492e493549bb49c14a434a4d4a524acf;
-    bytes32 internal constant HORSE_KEY_40 = 0x4ad34adf4b5d4b674b6d4be04be24beb4bed4bef4bf14bf34bf44bf64bfa4c7d;
-    bytes32 internal constant HORSE_KEY_41 = 0x4c824c884d094d154d9a4d9d4da74e234e274e2d4eb14eb54ec1000000000000;
+    /// 马着法 key（uint16 大端），升序（1434 字节，pad=0，45 块）
+    bytes32 internal constant HORSE_KEY_0 = 0x000b001300a600ac00ae0139013d0147014901d801dc01e201e402730277027d;
+    bytes32 internal constant HORSE_KEY_1 = 0x027f030e03120318031a039f03ad03b303b50444044e045004df04e9056c057e;
+    bytes32 internal constant HORSE_KEY_2 = 0x058606070619061f0621069e06a206b006b406ba06bc0739073d074b074f0755;
+    bytes32 internal constant HORSE_KEY_3 = 0x075707d407d807dd07e107e607ea07ef07f007f107f207f3086f087308810885;
+    bytes32 internal constant HORSE_KEY_4 = 0x088b088d090a090e091c09200926092809a509b709c109c30a400a520a5c0ad5;
+    bytes32 internal constant HORSE_KEY_5 = 0x0adf0af10af90b6e0b700b7a0b8c0b920b940c090c0b0c110c1f0c230c270c2d;
+    bytes32 internal constant HORSE_KEY_6 = 0x0c2f0ca40ca60cac0cb00cbe0cc20cc80cca0d3f0d410d470d4b0d590d5d0d63;
+    bytes32 internal constant HORSE_KEY_7 = 0x0d650dda0ddc0de20de60df40df80dfe0e000e750e770e810e850e8f0e930e99;
+    bytes32 internal constant HORSE_KEY_8 = 0x0e9b0f100f120f180f2a0f340f360fab0fb30fc50fcf10481052106410e110e3;
+    bytes32 internal constant HORSE_KEY_9 = 0x10ed10ff117c117e118411881196119a120f1217121f12231231123512b212b4;
+    bytes32 internal constant HORSE_KEY_10 = 0x12ba12be12cc12d01345134f135513591367136b13e813ea13f013f414021406;
+    bytes32 internal constant HORSE_KEY_11 = 0x14831485148b149d151e1526153815bb15c516541656166016ef16f116f716fb;
+    bytes32 internal constant HORSE_KEY_12 = 0x178a178c1792179618251827182d183118c018c218c818cc195b195d19631967;
+    bytes32 internal constant HORSE_KEY_13 = 0x19f619f819fe1a911a991b4a1b521be51beb1bed1c781c7c1c861c881d171d1b;
+    bytes32 internal constant HORSE_KEY_14 = 0x1d211d231db21db61dbc1dbe1e4d1e511e571e591ede1eec1ef21ef41f831f8d;
+    bytes32 internal constant HORSE_KEY_15 = 0x1f8f201e202820ab20bd20c521462158215e216021dd21e121ef21f321f921fb;
+    bytes32 internal constant HORSE_KEY_16 = 0x2278227c228a228e2294229623132317231c232023252329232e232f23302331;
+    bytes32 internal constant HORSE_KEY_17 = 0x233223ae23b223c023c423ca23cc2449244d245b245f2465246724e424f62500;
+    bytes32 internal constant HORSE_KEY_18 = 0x2502257f2591259b2614261e2630263826ad26af26b926cb26d126d32748274a;
+    bytes32 internal constant HORSE_KEY_19 = 0x2750275e27622766276c276e27e327e527eb27ef27fd280128072809287e2880;
+    bytes32 internal constant HORSE_KEY_20 = 0x2886288a2898289c28a228a42919291b2921292529332937293d293f29b429b6;
+    bytes32 internal constant HORSE_KEY_21 = 0x29c029c429ce29d229d829da2a4f2a512a572a692a732a752aea2af22b042b0e;
+    bytes32 internal constant HORSE_KEY_22 = 0x2b872b912ba32c202c222c2c2c3e2cbb2cbd2cc32cc72cd52cd92d4e2d562d5e;
+    bytes32 internal constant HORSE_KEY_23 = 0x2d622d702d742df12df32df92dfd2e0b2e0f2e842e8e2e942e982ea62eaa2f27;
+    bytes32 internal constant HORSE_KEY_24 = 0x2f292f2f2f332f412f452fc22fc42fca2fdc305d3065307730fa310431933195;
+    bytes32 internal constant HORSE_KEY_25 = 0x319f322e32303236323a32c932cb32d132d533643366336c337033ff34013407;
+    bytes32 internal constant HORSE_KEY_26 = 0x340b349a349c34a234a635353537353d35d035d8368936913724372a372c37b7;
+    bytes32 internal constant HORSE_KEY_27 = 0x37bb37c537c73856385a3860386238f138f538fb38fd398c3990399639983a1d;
+    bytes32 internal constant HORSE_KEY_28 = 0x3a2b3a313a333ac23acc3ace3b5d3b673bea3bfc3c043c853c973c9d3c9f3d1c;
+    bytes32 internal constant HORSE_KEY_29 = 0x3d203d2e3d323d383d3a3db73dbb3dc93dcd3dd33dd53e523e563e5b3e5f3e64;
+    bytes32 internal constant HORSE_KEY_30 = 0x3e683e6d3e6e3e6f3e703e713eed3ef13eff3f033f093f0b3f883f8c3f9a3f9e;
+    bytes32 internal constant HORSE_KEY_31 = 0x3fa43fa640234035403f404140be40d040da4153415d416f417741ec41ee41f8;
+    bytes32 internal constant HORSE_KEY_32 = 0x420a4210421242874289428f429d42a142a542ab42ad43224324432a432e433c;
+    bytes32 internal constant HORSE_KEY_33 = 0x43404346434843bd43bf43c543c943d743db43e143e34458445a446044644472;
+    bytes32 internal constant HORSE_KEY_34 = 0x4476447c447e44f344f544ff4503450d451145174519458e4590459645a845b2;
+    bytes32 internal constant HORSE_KEY_35 = 0x45b4462946314643464d46c646d046e2475f4761476b477d47fa47fc48024806;
+    bytes32 internal constant HORSE_KEY_36 = 0x48144818488d4895489d48a148af48b3493049324938493c494a494e49c349cd;
+    bytes32 internal constant HORSE_KEY_37 = 0x49d349d749e549e94a664a684a6e4a724a804a844b014b034b094b1b4b9c4ba4;
+    bytes32 internal constant HORSE_KEY_38 = 0x4bb64c394c434cd24cd44cde4d6d4d6f4d754d794e084e0a4e104e144ea34ea5;
+    bytes32 internal constant HORSE_KEY_39 = 0x4eab4eaf4f3e4f404f464f4a4fd94fdb4fe14fe550745076507c510f511751c2;
+    bytes32 internal constant HORSE_KEY_40 = 0x51c351c851c951ce51cf51ee51f05257525a525f5261526352655266526852f4;
+    bytes32 internal constant HORSE_KEY_41 = 0x52fb5300538d5393542b5430543354bf54c954cf5559555d556355b755b955f3;
+    bytes32 internal constant HORSE_KEY_42 = 0x55f555f655f855fc56015603560556905696569d572f573557c357cd57d2585b;
+    bytes32 internal constant HORSE_KEY_43 = 0x585f586b58f558ff590559805982598f59915993599559975998599a599e5a2d;
+    bytes32 internal constant HORSE_KEY_44 = 0x5a325a385ac55ad15b625b655b6f5bf75bfb5c015c915c955ca1000000000000;
 
-    /// 马着法对应的 leg+1（669 字节，pad=1，21 块）
+    /// 马着法对应的 leg+1（717 字节，pad=1，23 块）
     bytes32 internal constant HORSE_LEG_0 = 0x00020a030b0b04020c0c03050d0d0406040605070f0f0608101007111108120b;
     bytes32 internal constant HORSE_LEG_1 = 0x0b130c0c14140b0d0b0d15150c040c1616160d0f16180d0f1617181718061018;
-    bytes32 internal constant HORSE_LEG_2 = 0x1018180f110f11191910101a1a11111b0a14141c0b0b15151d0c16141614161e;
-    bytes32 internal constant HORSE_LEG_3 = 0x0d0d151715171f1f16181618161820200f0f17191719212118101a18181a2211;
-    bytes32 internal constant HORSE_LEG_4 = 0x11191923121a1a24131d4d14141e1e4c4c15151d1f1f1d16161e202017171f21;
-    bytes32 internal constant HORSE_LEG_5 = 0x1f2118182022201919212321231a1a22226f6f1b236e1e1e261f1f2720202628;
-    bytes32 internal constant HORSE_LEG_6 = 0x2121272222282b332c34342d2b35352c2e36362d2f2d2f2e3038382f31393930;
-    bytes32 internal constant HORSE_LEG_7 = 0x3a3a313b34343c35353d3d343634363e3e352d353f3f3f36383f4136383f4041;
-    bytes32 internal constant HORSE_LEG_8 = 0x40412f3941394141383a383a4242393943433a3a44333d3d4534343e3e46353f;
-    bytes32 internal constant HORSE_LEG_9 = 0x3d3f3d3f4736363e403e4048483f413f413f4149493838404240424a4a413943;
-    bytes32 internal constant HORSE_LEG_10 = 0x4141434b4c3a3a42424d3b43433c46763d3d474775753e3e464848463f3f4749;
-    bytes32 internal constant HORSE_LEG_11 = 0x494040484a484a4141494b494c42424a4c4a1d1d43434b4b1c444c47474f4848;
-    bytes32 internal constant HORSE_LEG_12 = 0x5049494f514a4a504b4b51545c555d5d56545e5e55575f5f5658565857596161;
-    bytes32 internal constant HORSE_LEG_13 = 0x585a62625963635a645d5d655e5e66665d5f5d5f67675e565e6868685f61686a;
-    bytes32 internal constant HORSE_LEG_14 = 0x5f6168696a696a58626a626a6a616361636b6b62626c6c63636d6e5c66666f5d;
-    bytes32 internal constant HORSE_LEG_15 = 0x5d67675e6866686668705f5f676967697171686a686a686a72726161696b696b;
-    bytes32 internal constant HORSE_LEG_16 = 0x73736a626c6a6a6c747563636b6b76646c6c24656f2323666670706f67676f71;
-    bytes32 internal constant HORSE_LEG_17 = 0x7168687072726969717371736a6a727472756b6b73757346466c6c7474456d75;
-    bytes32 internal constant HORSE_LEG_18 = 0x7070787171797272787a73737974747a7e7e84848a8a27278c807e8c817e8c82;
-    bytes32 internal constant HORSE_LEG_19 = 0x808c8c81887e84848080808c8c8c50508684808886848687808686878e8a848a;
-    bytes32 internal constant HORSE_LEG_20 = 0x8686868080807979868a868d8a868e8c86868c828d7e8a8a8c8c8c8686860000;
+    bytes32 internal constant HORSE_LEG_2 = 0x1018180f110f11191910101a1a11111b0a14141c0b0b15151d1d0c1614161416;
+    bytes32 internal constant HORSE_LEG_3 = 0x1e1e0d0d151715171f1f16181618161820200f0f17191719212118101a18181a;
+    bytes32 internal constant HORSE_LEG_4 = 0x2222111119192323121a1a24131d1d14141e1e15151d1f1d1f16161e201e2017;
+    bytes32 internal constant HORSE_LEG_5 = 0x171f211f211818202220221919212321231a1a22221b23231c261d1d271e1e26;
+    bytes32 internal constant HORSE_LEG_6 = 0x281f1f27292020282a2121292b22222a2c23232b242c2f37303838312f393930;
+    bytes32 internal constant HORSE_LEG_7 = 0x323a3a3133313332343c3c33353d3d343e3e353f38384039394141383a383a42;
+    bytes32 internal constant HORSE_LEG_8 = 0x423931394343433a3c43453a3c4344454445333d453d45453c3e3c3e46463d3d;
+    bytes32 internal constant HORSE_LEG_9 = 0x47473e3e4837414149383842424a4a3943414341434b4b3a3a424442444c4c43;
+    bytes32 internal constant HORSE_LEG_10 = 0x45434543454d4d3c3c444644464e4e453d474545474f4f3e3e464650503f4747;
+    bytes32 internal constant HORSE_LEG_11 = 0x51404a4a41414b4b42424a4c4a4c43434b4d4b4d44444c4e4c4e45454d4f4d4f;
+    bytes32 internal constant HORSE_LEG_12 = 0x46464e504e5047474f4f48505049534a4a544b4b53554c4c54564d4d55574e4e;
+    bytes32 internal constant HORSE_LEG_13 = 0x56584f4f575950505851595c645d65655e5c66665d5f67675e605e605f616969;
+    bytes32 internal constant HORSE_LEG_14 = 0x60626a6a616b6b626c65656d66666e6e656765676f6f665e6670707067697072;
+    bytes32 internal constant HORSE_LEG_15 = 0x67697071727172606a726a7272696b696b73736a6a74746b6b75646e6e766565;
+    bytes32 internal constant HORSE_LEG_16 = 0x6f6f777766706e706e70787867676f716f7179797072707270727a7a69697173;
+    bytes32 internal constant HORSE_LEG_17 = 0x71737b7b726a747272747c7c6b6b73737d7d6c74747e6d77776e6e78786f6f77;
+    bytes32 internal constant HORSE_LEG_18 = 0x7977797070787a787a7171797b797b72727a7c7a7c73737b7d7b7d74747c7c75;
+    bytes32 internal constant HORSE_LEG_19 = 0x7d7d768077778178788082797981837a7a82847b7b83857c7c84867d7d857e86;
+    bytes32 internal constant HORSE_LEG_20 = 0x8a8a909096962929988c8a988d8a988e8c98988d948a90908c8c8c9898985656;
+    bytes32 internal constant HORSE_LEG_21 = 0x92908c94929092938c9292939a9690969292928c8c8c83839296929996929a98;
+    bytes32 internal constant HORSE_LEG_22 = 0x9292988e998a9696989898929292000000000000000000000000000000000000;
 
     uint256 internal constant OFF_LINE_NODES = 0;
     uint256 internal constant OFF_LINE_LEN = 1;
@@ -197,128 +195,92 @@ library SanrenData {
     uint256 internal constant TABLE_COUNT = 12;
 
     // ── 表读取 ────────────────────────────────────────────────
-    /// @dev 读取 LINE_NODES 的第 idx 个字节。pad=0 用于抵消奇数位十六进制
+    /// @dev 读取 LINE_NODES 的第 idx 个字节。pad=1 用于抵消奇数位十六进制
     ///      字面量被 Solidity 补在最前面的那个 0 字节。
     function _line_nodesByte(uint256 idx) private pure returns (uint8) {
-        idx += 0;
+        idx += 1;
             if (idx >= 0 && idx < 32) {
                 uint256 sh = (31 - (idx - 0)) * 8;
-                return uint8(uint256(0x000102030405060708ffffffffffffffff090a0b0c0d0e0f1011ffffffffffff) >> sh);
+                return uint8(uint256(0x00000102030405060708090a0b0c0d0e0f101112131415161718191a24252627) >> sh);
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0xffff12131415161718191affffffffffffffff2425262728ffffffffffffffff) >> sh);
+                return uint8(uint256(0x28292a2b2c1b1c1d1e1f202122230009121b24ffffffff010a131c25ffffffff) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0xffffffff313a434c1b1c1d1e1f202122236d645b52020b141d24ffffffffffff) >> sh);
+                return uint8(uint256(0x020b141d26ffffffff030c151e27ffffffff040d161f28888987ff050e172029) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0xffffffffffff030c151e25ffffffffffffffffffffffff040d161f267c7d7bff) >> sh);
+                return uint8(uint256(0xffffffff060f18212affffffff071019222bffffffff08111a232cffffffff03) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0xffffffffffffffff050e172027ffffffffffffffffffffffff060f182128ffff) >> sh);
+                return uint8(uint256(0x0d17ffffffffffff050d15ffffffffffff8a8c888d96ffffffff888b8effffff) >> sh);
             }
             if (idx >= 160 && idx < 192) {
                 uint256 sh = (31 - (idx - 160)) * 8;
-                return uint8(uint256(0xffffffffffffffffffff010a131c4b423930ffffffffffffffffff030d17ffff) >> sh);
+                return uint8(uint256(0xffffff2d2e2f303132333435363738393a3b3c3d3e3f40414243444546475152) >> sh);
             }
             if (idx >= 192 && idx < 224) {
                 uint256 sh = (31 - (idx - 192)) * 8;
-                return uint8(uint256(0xffffffffffffffffffffffff050d15ffffffffffffffffffffffffffff7e807c) >> sh);
+                return uint8(uint256(0x5354555657585948494a4b4c4d4e4f502d363f4851ffffffff2e37404952ffff) >> sh);
             }
             if (idx >= 224 && idx < 256) {
                 uint256 sh = (31 - (idx - 224)) * 8;
-                return uint8(uint256(0x818affffffffffffffffffffffff7c7f82ffffffffffffffffffffffffffff29) >> sh);
+                return uint8(uint256(0xffff2f38414a53ffffffff3039424b54ffffffff313a434c558e8f87ff323b44) >> sh);
             }
             if (idx >= 256 && idx < 288) {
                 uint256 sh = (31 - (idx - 256)) * 8;
-                return uint8(uint256(0x2a2b2c2d2e2f3031ffffffffffffffff32333435363738393affffffffffffff) >> sh);
+                return uint8(uint256(0x4d56ffffffff333c454e57ffffffff343d464f58ffffffff353e475059ffffff) >> sh);
             }
             if (idx >= 288 && idx < 320) {
                 uint256 sh = (31 - (idx - 288)) * 8;
-                return uint8(uint256(0xff3b3c3d3e3f40414243ffffffffffffffff4d4e4f5051ffffffffffffffffff) >> sh);
+                return uint8(uint256(0xff303a44ffffffffffff323a42ffffffffffff90928e938affffffff8e9194ff) >> sh);
             }
             if (idx >= 320 && idx < 352) {
                 uint256 sh = (31 - (idx - 320)) * 8;
-                return uint8(uint256(0xffffff5a636c754445464748494a4b4c1b1209002b343d464dffffffffffffff) >> sh);
+                return uint8(uint256(0xffffffffff5a5b5c5d5e5f606162636465666768696a6b6c6d6e6f7071727374) >> sh);
             }
             if (idx >= 352 && idx < 384) {
                 uint256 sh = (31 - (idx - 352)) * 8;
-                return uint8(uint256(0xffffffffff2c353e474effffffffffffffffffffffff2d363f484f82837bffff) >> sh);
+                return uint8(uint256(0x7e7f8081828384858675767778797a7b7c7d5a636c757effffffff5b646d767f) >> sh);
             }
             if (idx >= 384 && idx < 416) {
                 uint256 sh = (31 - (idx - 384)) * 8;
-                return uint8(uint256(0xffffffffffffff2e37404950ffffffffffffffffffffffff2f38414a51ffffff) >> sh);
+                return uint8(uint256(0xffffffff5c656e7780ffffffff5d666f7881ffffffff5e67707982949587ff5f) >> sh);
             }
             if (idx >= 416 && idx < 448) {
                 uint256 sh = (31 - (idx - 416)) * 8;
-                return uint8(uint256(0xffffffffffffffffff2a333c45746b6259ffffffffffffffffff2c3640ffffff) >> sh);
+                return uint8(uint256(0x68717a83ffffffff6069727b84ffffffff616a737c85ffffffff626b747d86ff) >> sh);
             }
             if (idx >= 448 && idx < 480) {
                 uint256 sh = (31 - (idx - 448)) * 8;
-                return uint8(uint256(0xffffffffffffffffffffff2e363effffffffffffffffffffffffffff84868287) >> sh);
+                return uint8(uint256(0xffffff5d6771ffffffffffff5f676fffffffffffff9698949990ffffffff9497) >> sh);
             }
             if (idx >= 480 && idx < 512) {
                 uint256 sh = (31 - (idx - 480)) * 8;
-                return uint8(uint256(0x7effffffffffffffffffffffff828588ffffffffffffffffffffffffffff5253) >> sh);
+                return uint8(uint256(0x88ffffffffffff9897898b93ffffffff8c8b8f9199ffffffff929195978dffff) >> sh);
             }
             if (idx >= 512 && idx < 544) {
                 uint256 sh = (31 - (idx - 512)) * 8;
-                return uint8(uint256(0x5455565758595affffffffffffffff5b5c5d5e5f60616263ffffffffffffffff) >> sh);
-            }
-            if (idx >= 544 && idx < 576) {
-                uint256 sh = (31 - (idx - 544)) * 8;
-                return uint8(uint256(0x6465666768696a6b6cffffffffffffffff767778797affffffffffffffffffff) >> sh);
-            }
-            if (idx >= 576 && idx < 608) {
-                uint256 sh = (31 - (idx - 576)) * 8;
-                return uint8(uint256(0xffff08111a236d6e6f707172737475443b3229545d666f76ffffffffffffffff) >> sh);
-            }
-            if (idx >= 608 && idx < 640) {
-                uint256 sh = (31 - (idx - 608)) * 8;
-                return uint8(uint256(0xffffffff555e677077ffffffffffffffffffffffff565f68717888897bffffff) >> sh);
-            }
-            if (idx >= 640 && idx < 672) {
-                uint256 sh = (31 - (idx - 640)) * 8;
-                return uint8(uint256(0xffffffffffff5760697279ffffffffffffffffffffffff58616a737affffffff) >> sh);
-            }
-            if (idx >= 672 && idx < 704) {
-                uint256 sh = (31 - (idx - 672)) * 8;
-                return uint8(uint256(0xffffffffffffffff535c656e22191007ffffffffffffffffff555f69ffffffff) >> sh);
-            }
-            if (idx >= 704 && idx < 736) {
-                uint256 sh = (31 - (idx - 704)) * 8;
-                return uint8(uint256(0xffffffffffffffffffff575f67ffffffffffffffffffffffffffff8a8c888d84) >> sh);
-            }
-            if (idx >= 736 && idx < 768) {
-                uint256 sh = (31 - (idx - 736)) * 8;
-                return uint8(uint256(0xffffffffffffffffffffffff888b7cffffffffffffffffffffffffffff8c8b7d) >> sh);
-            }
-            if (idx >= 768 && idx < 800) {
-                uint256 sh = (31 - (idx - 768)) * 8;
-                return uint8(uint256(0x7f87ffffffffffffffffffffffff807f83858dffffffffffffffffffffffff86) >> sh);
-            }
-            if (idx >= 800 && idx < 832) {
-                uint256 sh = (31 - (idx - 800)) * 8;
-                return uint8(uint256(0x85898b81ffffffffffffffffffffffff00000000000000000000000000000000) >> sh);
+                return uint8(uint256(0xffff000000000000000000000000000000000000000000000000000000000000) >> sh);
             }
         revert("oob");
     }
 
-    /// @dev 读取 LINE_LEN 的第 idx 个字节。pad=0 用于抵消奇数位十六进制
+    /// @dev 读取 LINE_LEN 的第 idx 个字节。pad=1 用于抵消奇数位十六进制
     ///      字面量被 Solidity 补在最前面的那个 0 字节。
     function _line_lenByte(uint256 idx) private pure returns (uint8) {
-        idx += 0;
+        idx += 1;
             if (idx >= 0 && idx < 32) {
                 uint256 sh = (31 - (idx - 0)) * 8;
-                return uint8(uint256(0x0909090511050508050508030305030909090511050508050508030305030909) >> sh);
+                return uint8(uint256(0x0009090909090505050508050505050303050309090909090505050508050505) >> sh);
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0905110505080505080303050305050500000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x0503030503090909090905050505080505050503030503050505000000000000) >> sh);
             }
         revert("oob");
     }
@@ -333,19 +295,19 @@ library SanrenData {
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0202020202020202020202020302030202020202020204020202020202020302) >> sh);
+                return uint8(uint256(0x0202020202020202020202020202020203020302020202020202040202020202) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x0302020202020202020202020202020202020202020302030202020202020204) >> sh);
+                return uint8(uint256(0x0202030203020202020202020202020202020202020202020202020202030203) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x0202020202020203020302020202020202020202020202020202020304020203) >> sh);
+                return uint8(uint256(0x0202020202020204020202020202020302030202020202020202020202020202) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0x0202040202030202040202030202000000000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x0202020202020203040202030202040202030202040202030202000000000000) >> sh);
             }
         revert("oob");
     }
@@ -364,31 +326,35 @@ library SanrenData {
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x008c009000940098009c00a000a400a800ac00b000b400b800bc00c200c600cc) >> sh);
+                return uint8(uint256(0x008c009000940098009c00a000a400a800ac00b000b400b800bc00c000c400c8) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x00d000d400d800dc00e000e400e800f000f400f800fc010001040108010c0112) >> sh);
+                return uint8(uint256(0x00cc00d200d600dc00e000e400e800ec00f000f400f8010001040108010c0110) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0x0116011c012001240128012c013001340138013c014001440148014c01500154) >> sh);
+                return uint8(uint256(0x01140118011c01220126012c013001340138013c014001440148014c01500154) >> sh);
             }
             if (idx >= 160 && idx < 192) {
                 uint256 sh = (31 - (idx - 160)) * 8;
-                return uint8(uint256(0x0158015c016001640168016c01720176017c018001840188018c019001940198) >> sh);
+                return uint8(uint256(0x0158015c016001640168016c017001740178017c018001840188018c01920196) >> sh);
             }
             if (idx >= 192 && idx < 224) {
                 uint256 sh = (31 - (idx - 192)) * 8;
-                return uint8(uint256(0x01a001a401a801ac01b001b401b801bc01c201c601cc01d001d401d801dc01e0) >> sh);
+                return uint8(uint256(0x019c01a001a401a801ac01b001b401b801c001c401c801cc01d001d401d801dc) >> sh);
             }
             if (idx >= 224 && idx < 256) {
                 uint256 sh = (31 - (idx - 224)) * 8;
-                return uint8(uint256(0x01e401e801ec01f001f401f801fc020002040208020c02100216021e02220226) >> sh);
+                return uint8(uint256(0x01e201e601ec01f001f401f801fc020002040208020c021002140218021c0220) >> sh);
             }
             if (idx >= 256 && idx < 288) {
                 uint256 sh = (31 - (idx - 256)) * 8;
-                return uint8(uint256(0x022c02300234023c02400244024a024e0252025a025e02620268026c02700000) >> sh);
+                return uint8(uint256(0x02240228022c023002340238023c02400246024e02520256025c02600264026c) >> sh);
+            }
+            if (idx >= 288 && idx < 320) {
+                uint256 sh = (31 - (idx - 288)) * 8;
+                return uint8(uint256(0x02700274027a027e0282028a028e02920298029c02a000000000000000000000) >> sh);
             }
         revert("oob");
     }
@@ -399,83 +365,87 @@ library SanrenData {
         idx += 0;
             if (idx >= 0 && idx < 32) {
                 uint256 sh = (31 - (idx - 0)) * 8;
-                return uint8(uint256(0x0000131000010a0000020500000306000b0000040700000508000c0000060900) >> sh);
+                return uint8(uint256(0x000005000001060000020700000308000e000004090000050a000f0000060b00) >> sh);
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x00072807000822000100130f01010a010102050101030601010407010b010c01) >> sh);
+                return uint8(uint256(0x00070c0000080d0001000501010106010102070101030801010409010e010f01) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x010508010106090101072806010822010200130e02010a020202050202030602) >> sh);
+                return uint8(uint256(0x01050a0101060b0101070c0101080d0102000502020106020202070202030802) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x0c0202040702020508020b020206090202072805020822020404130d04050a03) >> sh);
+                return uint8(uint256(0x0f020204090202050a020e0202060b0202070c0202080d020400050304010603) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0x04060503040706030408070304090803040a0903040b2804040c220303000504) >> sh);
+                return uint8(uint256(0x04020703040308030404090304050a0304060b0304070c0304080d0303000504) >> sh);
             }
             if (idx >= 160 && idx < 192) {
                 uint256 sh = (31 - (idx - 160)) * 8;
-                return uint8(uint256(0x030106040302070403030804030409040f0022100f0119000f0214000f031500) >> sh);
+                return uint8(uint256(0x0301060403020704030308040304090403050a0403060b0403070c0403080d04) >> sh);
             }
             if (idx >= 192 && idx < 224) {
                 uint256 sh = (31 - (idx - 192)) * 8;
-                return uint8(uint256(0x1a000f0416000f0517001b000f0618000a070f0704000f081000220f10011901) >> sh);
+                return uint8(uint256(0x12001700120118001202190012031a00200012041b0012051c00210012061d00) >> sh);
             }
             if (idx >= 224 && idx < 256) {
                 uint256 sh = (31 - (idx - 224)) * 8;
-                return uint8(uint256(0x1002140110031501100416011a011b0110051701100618010a06100704011008) >> sh);
+                return uint8(uint256(0x12071e0012081f0013001701130118011302190113031a0113041b0120012101) >> sh);
             }
             if (idx >= 256 && idx < 288) {
                 uint256 sh = (31 - (idx - 256)) * 8;
-                return uint8(uint256(0x1100220e1101190211021402110315021b0211041602110517021a0211061802) >> sh);
+                return uint8(uint256(0x13051c0113061d0113071e0113081f0114001702140118021402190214031a02) >> sh);
             }
             if (idx >= 288 && idx < 320) {
                 uint256 sh = (31 - (idx - 288)) * 8;
-                return uint8(uint256(0x0a051107040211081304220d1305190313061403130715031308160313091703) >> sh);
+                return uint8(uint256(0x210214041b0214051c02200214061d0214071e0214081f021600170316011803) >> sh);
             }
             if (idx >= 320 && idx < 352) {
                 uint256 sh = (31 - (idx - 320)) * 8;
-                return uint8(uint256(0x130a18030a04130b0403130c1200140412011504120216041203170412041804) >> sh);
+                return uint8(uint256(0x1602190316031a0316041b0316051c0316061d0316071e0316081f0315001704) >> sh);
             }
             if (idx >= 352 && idx < 384) {
                 uint256 sh = (31 - (idx - 352)) * 8;
-                return uint8(uint256(0x04101e001e0128001e0223001e03240029001e0425001e0526002a001e062700) >> sh);
+                return uint8(uint256(0x150118041502190415031a0415041b0415051c0415061d0415071e0415081f04) >> sh);
             }
             if (idx >= 384 && idx < 416) {
                 uint256 sh = (31 - (idx - 384)) * 8;
-                return uint8(uint256(0x19071e0713001e08040f1f001f0128011f0223011f0324011f04250129012a01) >> sh);
+                return uint8(uint256(0x2400290024012a0024022b0024032c00320024042d0024052e00330024062f00) >> sh);
             }
             if (idx >= 416 && idx < 448) {
                 uint256 sh = (31 - (idx - 416)) * 8;
-                return uint8(uint256(0x1f0526011f06270119061f0713011f08040e2000200128022002230220032402) >> sh);
+                return uint8(uint256(0x24073000240831002500290125012a0125022b0125032c0125042d0132013301) >> sh);
             }
             if (idx >= 448 && idx < 480) {
                 uint256 sh = (31 - (idx - 448)) * 8;
-                return uint8(uint256(0x2a0220042502200526022902200627021905200713022008040d220422052803) >> sh);
+                return uint8(uint256(0x25052e0125062f0125073001250831012600290226012a0226022b0226032c02) >> sh);
             }
             if (idx >= 480 && idx < 512) {
                 uint256 sh = (31 - (idx - 480)) * 8;
-                return uint8(uint256(0x22062303220724032208250322092603220a27031904220b1303220c21002304) >> sh);
+                return uint8(uint256(0x330226042d0226052e02320226062f0226073002260831022800290328012a03) >> sh);
             }
             if (idx >= 512 && idx < 544) {
                 uint256 sh = (31 - (idx - 512)) * 8;
-                return uint8(uint256(0x2101240421022504210326042104270407071607250707050d020e002c020706) >> sh);
+                return uint8(uint256(0x28022b0328032c0328042d0328052e0328062f03280730032808310327002904) >> sh);
             }
             if (idx >= 544 && idx < 576) {
                 uint256 sh = (31 - (idx - 544)) * 8;
-                return uint8(uint256(0x2d020d001c040e012d032e010d012e000d032f040e0216051c021d0016062e02) >> sh);
+                return uint8(uint256(0x27012a0427022b0427032c0427042d0427052e0427062f042707300427083104) >> sh);
             }
             if (idx >= 576 && idx < 608) {
                 uint256 sh = (31 - (idx - 576)) * 8;
-                return uint8(uint256(0x1c002b041d012e032f011c012f001c032d041d0225052b022c0025062f020d04) >> sh);
+                return uint8(uint256(0x09071b072d070905100211003502090636021000220411013603370110013700) >> sh);
             }
             if (idx >= 608 && idx < 640) {
                 uint256 sh = (31 - (idx - 608)) * 8;
-                return uint8(uint256(0x2b002c012d012f032b012d002b032e0400000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x1003380411021b05220223001b06370222003404230137033801220138002203) >> sh);
+            }
+            if (idx >= 640 && idx < 672) {
+                uint256 sh = (31 - (idx - 640)) * 8;
+                return uint8(uint256(0x360423022d05340235002d063802100434003501360138033401360034033704) >> sh);
             }
         revert("oob");
     }
@@ -490,19 +460,19 @@ library SanrenData {
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0101010101010101010000000000000000000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x0101010101010101010101010100000000000000000000000000000000000000) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x0000000000000000000000000000000000000202020202020202020202020202) >> sh);
+                return uint8(uint256(0x0000000000000000000000000000000000000000000000000000020202020202) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x0202020202020202020202020202020202020202020202020202020303030303) >> sh);
+                return uint8(uint256(0x0202020202020202020202020202020202020202020202020202020202020202) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0x0303030303030303030303030303000000000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x0202020202020203030303030303030303030303030303030303000000000000) >> sh);
             }
         revert("oob");
     }
@@ -517,19 +487,19 @@ library SanrenData {
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0506070802030405060001020304050607080001020304050607080001020304) >> sh);
+                return uint8(uint256(0x0506070800010203040506070800010203040506070800010203040506070800) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x0506070800010203040506070802030405060001020304050607080001020304) >> sh);
+                return uint8(uint256(0x0102030405060708000102030405060708000102030405060708000102030405) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x050607080001020304050607080001020304050607080203040506ffffffffff) >> sh);
+                return uint8(uint256(0x0607080001020304050607080001020304050607080001020304050607080001) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0xffffffffffffffffffffffffffff000000000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x02030405060708ffffffffffffffffffffffffffffffffffffff000000000000) >> sh);
             }
         revert("oob");
     }
@@ -544,19 +514,19 @@ library SanrenData {
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0303030304040404040000000000000000000101010101010101010202020202) >> sh);
+                return uint8(uint256(0x0303030304040404040404040400000000000000000001010101010101010102) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x0202020203030303030303030304040404040000000000000000000101010101) >> sh);
+                return uint8(uint256(0x0202020202020202030303030303030303040404040404040404000000000000) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x010101010202020202020202020303030303030303030404040404ffffffffff) >> sh);
+                return uint8(uint256(0x0000000101010101010101010202020202020202020303030303030303030404) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0xffffffffffffffffffffffffffff000000000000000000000000000000000000) >> sh);
+                return uint8(uint256(0x04040404040404ffffffffffffffffffffffffffffffffffffff000000000000) >> sh);
             }
         revert("oob");
     }
@@ -567,11 +537,11 @@ library SanrenData {
         idx += 0;
             if (idx >= 0 && idx < 32) {
                 uint256 sh = (31 - (idx - 0)) * 8;
-                return uint8(uint256(0x000000000070e0c0010000000000000000003870e00000000000000000000000) >> sh);
+                return uint8(uint256(0x000000000000070e1c00000000000000000000003870e0000000000000000000) >> sh);
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0000000000000000000000000000e0c081030000000000000000000000000000) >> sh);
+                return uint8(uint256(0x00000000000000000000000000000000000000e0c08103000000000000000000) >> sh);
             }
         revert("oob");
     }
@@ -582,11 +552,11 @@ library SanrenData {
         idx += 0;
             if (idx >= 0 && idx < 32) {
                 uint256 sh = (31 - (idx - 0)) * 8;
-                return uint8(uint256(0x0000000000feffffffff0300000000000000ffffffffff010000000000000000) >> sh);
+                return uint8(uint256(0x0000000000e0ffffffffff030000000000000000ffffffffff1f000000000000) >> sh);
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x0000000000000000000000000000fcffffffff07000000000000000000000000) >> sh);
+                return uint8(uint256(0x00000000000000000000000000000000000000fcffffffff7f00000000000000) >> sh);
             }
         revert("oob");
     }
@@ -597,171 +567,183 @@ library SanrenData {
         idx += 0;
             if (idx >= 0 && idx < 32) {
                 uint256 sh = (31 - (idx - 0)) * 8;
-                return uint8(uint256(0x000b0013009a00a000a201210125012f013101b401b801be01c002430247024d) >> sh);
+                return uint8(uint256(0x000b001300a600ac00ae0139013d0147014901d801dc01e201e402730277027d) >> sh);
             }
             if (idx >= 32 && idx < 64) {
                 uint256 sh = (31 - (idx - 32)) * 8;
-                return uint8(uint256(0x024f02d202d602dc02de03570365036b036d03f003fa03fc047f048905000512) >> sh);
+                return uint8(uint256(0x027f030e03120318031a039f03ad03b303b50444044e045004df04e9056c057e) >> sh);
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x051a058f05a105a705a9061a061e062c06300636063806a906ad06bb06bf06c5) >> sh);
+                return uint8(uint256(0x058606070619061f0621069e06a206b006b406ba06bc0739073d074b074f0755) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x06c70738073c07410745074a074e0753075407550756075707c707cb07d907dd) >> sh);
+                return uint8(uint256(0x075707d407d807dd07e107e607ea07ef07f007f107f207f3086f087308810885) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0x07e307e50856085a0868086c0872087408e508f70901090309740986099009fd) >> sh);
+                return uint8(uint256(0x088b088d090a090e091c09200926092809a509b709c109c30a400a520a5c0ad5) >> sh);
             }
             if (idx >= 160 && idx < 192) {
                 uint256 sh = (31 - (idx - 160)) * 8;
-                return uint8(uint256(0x0a070a190a470a8a0a8c0a960aa80ad60b190b1b0b210b2f0b330b370b3d0ba8) >> sh);
+                return uint8(uint256(0x0adf0af10af90b6e0b700b7a0b8c0b920b940c090c0b0c110c1f0c230c270c2d) >> sh);
             }
             if (idx >= 192 && idx < 224) {
                 uint256 sh = (31 - (idx - 192)) * 8;
-                return uint8(uint256(0x0baa0bb00bb40bc20bc60bca0bcc0c370c390c3f0c430c510c550c590c5b0cc6) >> sh);
+                return uint8(uint256(0x0c2f0ca40ca60cac0cb00cbe0cc20cc80cca0d3f0d410d470d4b0d590d5d0d63) >> sh);
             }
             if (idx >= 224 && idx < 256) {
                 uint256 sh = (31 - (idx - 224)) * 8;
-                return uint8(uint256(0x0cc80cce0cd20ce00ce40ce80cea0d550d570d610d650d6f0d730d770de40de6) >> sh);
+                return uint8(uint256(0x0d650dda0ddc0de20de60df40df80dfe0e000e750e770e810e850e8f0e930e99) >> sh);
             }
             if (idx >= 256 && idx < 288) {
                 uint256 sh = (31 - (idx - 256)) * 8;
-                return uint8(uint256(0x0dec0dfe0e4b0e730e7b0e8d0eda0f040f0e0f3c0f910f930f9d0fad0fc90fcb) >> sh);
+                return uint8(uint256(0x0e9b0f100f120f180f2a0f340f360fab0fb30fc50fcf10481052106410e110e3) >> sh);
             }
             if (idx >= 288 && idx < 320) {
                 uint256 sh = (31 - (idx - 288)) * 8;
-                return uint8(uint256(0x102010221028102c103c106210a710af10b710bb10cb113e11401146114a1156) >> sh);
+                return uint8(uint256(0x10ed10ff117c117e118411881196119a120f1217121f12231231123512b212b4) >> sh);
             }
             if (idx >= 320 && idx < 352) {
                 uint256 sh = (31 - (idx - 320)) * 8;
-                return uint8(uint256(0x115a11c511cf11d511d911e5125c125e12641268127412bb12eb12ed12f31303) >> sh);
+                return uint8(uint256(0x12ba12be12cc12d01345134f135513591367136b13e813ea13f013f414021406) >> sh);
             }
             if (idx >= 352 && idx < 384) {
                 uint256 sh = (31 - (idx - 352)) * 8;
-                return uint8(uint256(0x13401342137a138213cf140b140d1417149a149c14a61529152b1531153515b8) >> sh);
+                return uint8(uint256(0x14831485148b149d151e1526153815bb15c516541656166016ef16f116f716fb) >> sh);
             }
             if (idx >= 384 && idx < 416) {
                 uint256 sh = (31 - (idx - 384)) * 8;
-                return uint8(uint256(0x15ba15c016471649164f16f216fa1781178717891808180c18161818189b189f) >> sh);
+                return uint8(uint256(0x178a178c1792179618251827182d183118c018c218c818cc195b195d19631967) >> sh);
             }
             if (idx >= 416 && idx < 448) {
                 uint256 sh = (31 - (idx - 416)) * 8;
-                return uint8(uint256(0x18a518a7192a192e1934193619b919bd19c319c51a3e1a4c1a521a541ad71ae1) >> sh);
+                return uint8(uint256(0x19f619f819fe1a911a991b4a1b521be51beb1bed1c781c7c1c861c881d171d1b) >> sh);
             }
             if (idx >= 448 && idx < 480) {
                 uint256 sh = (31 - (idx - 448)) * 8;
-                return uint8(uint256(0x1ae31b661b701be71bf91c011c761c881c8e1c901d011d051d131d171d1d1d1f) >> sh);
+                return uint8(uint256(0x1d211d231db21db61dbc1dbe1e4d1e511e571e591ede1eec1ef21ef41f831f8d) >> sh);
             }
             if (idx >= 480 && idx < 512) {
                 uint256 sh = (31 - (idx - 480)) * 8;
-                return uint8(uint256(0x1d901d941da21da61dac1dae1e1f1e231e281e2c1e311e351e3a1e3b1e3c1e3d) >> sh);
+                return uint8(uint256(0x1f8f201e202820ab20bd20c521462158215e216021dd21e121ef21f321f921fb) >> sh);
             }
             if (idx >= 512 && idx < 544) {
                 uint256 sh = (31 - (idx - 512)) * 8;
-                return uint8(uint256(0x1e3e1eae1eb21ec01ec41eca1ecc1f3d1f411f4f1f531f591f5b1fcc1fde1fe8) >> sh);
+                return uint8(uint256(0x2278227c228a228e2294229623132317231c232023252329232e232f23302331) >> sh);
             }
             if (idx >= 544 && idx < 576) {
                 uint256 sh = (31 - (idx - 544)) * 8;
-                return uint8(uint256(0x1fea205b206d207720e420ee2100212e21712173217d218f21bd220022022208) >> sh);
+                return uint8(uint256(0x233223ae23b223c023c423ca23cc2449244d245b245f2465246724e424f62500) >> sh);
             }
             if (idx >= 576 && idx < 608) {
                 uint256 sh = (31 - (idx - 576)) * 8;
-                return uint8(uint256(0x2216221a221e2224228f22912297229b22a922ad22b122b3231e23202326232a) >> sh);
+                return uint8(uint256(0x2502257f2591259b2614261e2630263826ad26af26b926cb26d126d32748274a) >> sh);
             }
             if (idx >= 608 && idx < 640) {
                 uint256 sh = (31 - (idx - 608)) * 8;
-                return uint8(uint256(0x2338233c2340234223ad23af23b523b923c723cb23cf23d1243c243e2448244c) >> sh);
+                return uint8(uint256(0x2750275e27622766276c276e27e327e527eb27ef27fd280128072809287e2880) >> sh);
             }
             if (idx >= 640 && idx < 672) {
                 uint256 sh = (31 - (idx - 640)) * 8;
-                return uint8(uint256(0x2456245a245e24b724cb24cd24d324e52546255a2562257425eb25f526232678) >> sh);
+                return uint8(uint256(0x2886288a2898289c28a228a42919291b2921292529332937293d293f29b429b6) >> sh);
             }
             if (idx >= 672 && idx < 704) {
                 uint256 sh = (31 - (idx - 672)) * 8;
-                return uint8(uint256(0x267a2684269426b026b227072709270f271327232749278e2796279e27a227b2) >> sh);
+                return uint8(uint256(0x29c029c429ce29d229d829da2a4f2a512a572a692a732a752aea2af22b042b0e) >> sh);
             }
             if (idx >= 704 && idx < 736) {
                 uint256 sh = (31 - (idx - 704)) * 8;
-                return uint8(uint256(0x28252827282d2831283d284128ac28b628bc28c028cc292729432945294b294f) >> sh);
+                return uint8(uint256(0x2b872b912ba32c202c222c2c2c3e2cbb2cbd2cc32cc72cd52cd92d4e2d562d5e) >> sh);
             }
             if (idx >= 736 && idx < 768) {
                 uint256 sh = (31 - (idx - 736)) * 8;
-                return uint8(uint256(0x295b29ac29ae29d229d429da29ea2a3b2a612a692af22af42afe2b812b832b8d) >> sh);
+                return uint8(uint256(0x2d622d702d742df12df32df92dfd2e0b2e0f2e842e8e2e942e982ea62eaa2f27) >> sh);
             }
             if (idx >= 768 && idx < 800) {
                 uint256 sh = (31 - (idx - 768)) * 8;
-                return uint8(uint256(0x2c102c122c182c1c2c9f2ca12ca72d2e2d302d362dd92de12e682e6e2e702eef) >> sh);
+                return uint8(uint256(0x2f292f2f2f332f412f452fc22fc42fca2fdc305d3065307730fa310431933195) >> sh);
             }
             if (idx >= 800 && idx < 832) {
                 uint256 sh = (31 - (idx - 800)) * 8;
-                return uint8(uint256(0x2ef32efd2eff2f822f862f8c2f8e30113015301b301d30a030a430aa30ac3125) >> sh);
+                return uint8(uint256(0x319f322e32303236323a32c932cb32d132d533643366336c337033ff34013407) >> sh);
             }
             if (idx >= 832 && idx < 864) {
                 uint256 sh = (31 - (idx - 832)) * 8;
-                return uint8(uint256(0x31333139313b31be31c831ca324d325732ce32e032e8335d336f3375337733e8) >> sh);
+                return uint8(uint256(0x340b349a349c34a234a635353537353d35d035d8368936913724372a372c37b7) >> sh);
             }
             if (idx >= 864 && idx < 896) {
                 uint256 sh = (31 - (idx - 864)) * 8;
-                return uint8(uint256(0x33ec33fa33fe340434063477347b3489348d349334953506350a350f35133518) >> sh);
+                return uint8(uint256(0x37bb37c537c73856385a3860386238f138f538fb38fd398c3990399639983a1d) >> sh);
             }
             if (idx >= 896 && idx < 928) {
                 uint256 sh = (31 - (idx - 896)) * 8;
-                return uint8(uint256(0x351c352135223523352435253595359935a735ab35b135b3362436283636363a) >> sh);
+                return uint8(uint256(0x3a2b3a313a333ac23acc3ace3b5d3b673bea3bfc3c043c853c973c9d3c9f3d1c) >> sh);
             }
             if (idx >= 928 && idx < 960) {
                 uint256 sh = (31 - (idx - 928)) * 8;
-                return uint8(uint256(0x3640364236b336c536cf36d137423754375e379a37cb37d537e738293858385a) >> sh);
+                return uint8(uint256(0x3d203d2e3d323d383d3a3db73dbb3dc93dcd3dd33dd53e523e563e5b3e5f3e64) >> sh);
             }
             if (idx >= 960 && idx < 992) {
                 uint256 sh = (31 - (idx - 960)) * 8;
-                return uint8(uint256(0x3864387638e738e938ef38fd39013905390b39763978397e3982399039943998) >> sh);
+                return uint8(uint256(0x3e683e6d3e6e3e6f3e703e713eed3ef13eff3f033f093f0b3f883f8c3f9a3f9e) >> sh);
             }
             if (idx >= 992 && idx < 1024) {
                 uint256 sh = (31 - (idx - 992)) * 8;
-                return uint8(uint256(0x399a3a053a073a0d3a113a1f3a233a273a293a943a963a9c3aa03aae3ab23ab6) >> sh);
+                return uint8(uint256(0x3fa43fa640234035403f404140be40d040da4153415d416f417741ec41ee41f8) >> sh);
             }
             if (idx >= 1024 && idx < 1056) {
                 uint256 sh = (31 - (idx - 1024)) * 8;
-                return uint8(uint256(0x3ab83b233b253b2f3b333b3d3b413b453b9e3bb23bb43bba3bcc3c2d3c413c49) >> sh);
+                return uint8(uint256(0x420a4210421242874289428f429d42a142a542ab42ad43224324432a432e433c) >> sh);
             }
             if (idx >= 1056 && idx < 1088) {
                 uint256 sh = (31 - (idx - 1056)) * 8;
-                return uint8(uint256(0x3c5b3c8f3cd23cdc3d1c3d1e3d5f3d613d6b3d7b3db53dee3df03df63dfa3e0a) >> sh);
+                return uint8(uint256(0x43404346434843bd43bf43c543c943d743db43e143e34458445a446044644472) >> sh);
             }
             if (idx >= 1088 && idx < 1120) {
                 uint256 sh = (31 - (idx - 1088)) * 8;
-                return uint8(uint256(0x3e753e7d3e853e893e993f0c3f0e3f143f183f243f283f933f9d3fa33fa73fb3) >> sh);
+                return uint8(uint256(0x4476447c447e44f344f544ff4503450d451145174519458e4590459645a845b2) >> sh);
             }
             if (idx >= 1120 && idx < 1152) {
                 uint256 sh = (31 - (idx - 1120)) * 8;
-                return uint8(uint256(0x400e402a402c4032403640424093409540b940bb40c140d141224148415041d9) >> sh);
+                return uint8(uint256(0x45b4462946314643464d46c646d046e2475f4761476b477d47fa47fc48024806) >> sh);
             }
             if (idx >= 1152 && idx < 1184) {
                 uint256 sh = (31 - (idx - 1152)) * 8;
-                return uint8(uint256(0x41db41e54268426a427442f742f942ff430343864388438e44154417441d44ba) >> sh);
+                return uint8(uint256(0x48144818488d4895489d48a148af48b3493049324938493c494a494e49c349cd) >> sh);
             }
             if (idx >= 1184 && idx < 1216) {
                 uint256 sh = (31 - (idx - 1184)) * 8;
-                return uint8(uint256(0x44bb44c044c144c644c744e644e845434546454b454d454f45514552455445d4) >> sh);
+                return uint8(uint256(0x49d349d749e549e94a664a684a6e4a724a804a844b014b034b094b1b4b9c4ba4) >> sh);
             }
             if (idx >= 1216 && idx < 1248) {
                 uint256 sh = (31 - (idx - 1216)) * 8;
-                return uint8(uint256(0x45db45e04661466746f346f846fb477b4785478b4809480d4813486348654897) >> sh);
+                return uint8(uint256(0x4bb64c394c434cd24cd44cde4d6d4d6f4d754d794e084e0a4e104e144ea34ea5) >> sh);
             }
             if (idx >= 1248 && idx < 1280) {
                 uint256 sh = (31 - (idx - 1248)) * 8;
-                return uint8(uint256(0x4899489a489c48a048a548a748a94928492e493549bb49c14a434a4d4a524acf) >> sh);
+                return uint8(uint256(0x4eab4eaf4f3e4f404f464f4a4fd94fdb4fe14fe550745076507c510f511751c2) >> sh);
             }
             if (idx >= 1280 && idx < 1312) {
                 uint256 sh = (31 - (idx - 1280)) * 8;
-                return uint8(uint256(0x4ad34adf4b5d4b674b6d4be04be24beb4bed4bef4bf14bf34bf44bf64bfa4c7d) >> sh);
+                return uint8(uint256(0x51c351c851c951ce51cf51ee51f05257525a525f5261526352655266526852f4) >> sh);
             }
             if (idx >= 1312 && idx < 1344) {
                 uint256 sh = (31 - (idx - 1312)) * 8;
-                return uint8(uint256(0x4c824c884d094d154d9a4d9d4da74e234e274e2d4eb14eb54ec1000000000000) >> sh);
+                return uint8(uint256(0x52fb5300538d5393542b5430543354bf54c954cf5559555d556355b755b955f3) >> sh);
+            }
+            if (idx >= 1344 && idx < 1376) {
+                uint256 sh = (31 - (idx - 1344)) * 8;
+                return uint8(uint256(0x55f555f655f855fc56015603560556905696569d572f573557c357cd57d2585b) >> sh);
+            }
+            if (idx >= 1376 && idx < 1408) {
+                uint256 sh = (31 - (idx - 1376)) * 8;
+                return uint8(uint256(0x585f586b58f558ff590559805982598f59915993599559975998599a599e5a2d) >> sh);
+            }
+            if (idx >= 1408 && idx < 1440) {
+                uint256 sh = (31 - (idx - 1408)) * 8;
+                return uint8(uint256(0x5a325a385ac55ad15b625b655b6f5bf75bfb5c015c915c955ca1000000000000) >> sh);
             }
         revert("oob");
     }
@@ -780,79 +762,87 @@ library SanrenData {
             }
             if (idx >= 64 && idx < 96) {
                 uint256 sh = (31 - (idx - 64)) * 8;
-                return uint8(uint256(0x1018180f110f11191910101a1a11111b0a14141c0b0b15151d0c16141614161e) >> sh);
+                return uint8(uint256(0x1018180f110f11191910101a1a11111b0a14141c0b0b15151d1d0c1614161416) >> sh);
             }
             if (idx >= 96 && idx < 128) {
                 uint256 sh = (31 - (idx - 96)) * 8;
-                return uint8(uint256(0x0d0d151715171f1f16181618161820200f0f17191719212118101a18181a2211) >> sh);
+                return uint8(uint256(0x1e1e0d0d151715171f1f16181618161820200f0f17191719212118101a18181a) >> sh);
             }
             if (idx >= 128 && idx < 160) {
                 uint256 sh = (31 - (idx - 128)) * 8;
-                return uint8(uint256(0x11191923121a1a24131d4d14141e1e4c4c15151d1f1f1d16161e202017171f21) >> sh);
+                return uint8(uint256(0x2222111119192323121a1a24131d1d14141e1e15151d1f1d1f16161e201e2017) >> sh);
             }
             if (idx >= 160 && idx < 192) {
                 uint256 sh = (31 - (idx - 160)) * 8;
-                return uint8(uint256(0x1f2118182022201919212321231a1a22226f6f1b236e1e1e261f1f2720202628) >> sh);
+                return uint8(uint256(0x171f211f211818202220221919212321231a1a22221b23231c261d1d271e1e26) >> sh);
             }
             if (idx >= 192 && idx < 224) {
                 uint256 sh = (31 - (idx - 192)) * 8;
-                return uint8(uint256(0x2121272222282b332c34342d2b35352c2e36362d2f2d2f2e3038382f31393930) >> sh);
+                return uint8(uint256(0x281f1f27292020282a2121292b22222a2c23232b242c2f37303838312f393930) >> sh);
             }
             if (idx >= 224 && idx < 256) {
                 uint256 sh = (31 - (idx - 224)) * 8;
-                return uint8(uint256(0x3a3a313b34343c35353d3d343634363e3e352d353f3f3f36383f4136383f4041) >> sh);
+                return uint8(uint256(0x323a3a3133313332343c3c33353d3d343e3e353f38384039394141383a383a42) >> sh);
             }
             if (idx >= 256 && idx < 288) {
                 uint256 sh = (31 - (idx - 256)) * 8;
-                return uint8(uint256(0x40412f3941394141383a383a4242393943433a3a44333d3d4534343e3e46353f) >> sh);
+                return uint8(uint256(0x423931394343433a3c43453a3c4344454445333d453d45453c3e3c3e46463d3d) >> sh);
             }
             if (idx >= 288 && idx < 320) {
                 uint256 sh = (31 - (idx - 288)) * 8;
-                return uint8(uint256(0x3d3f3d3f4736363e403e4048483f413f413f4149493838404240424a4a413943) >> sh);
+                return uint8(uint256(0x47473e3e4837414149383842424a4a3943414341434b4b3a3a424442444c4c43) >> sh);
             }
             if (idx >= 320 && idx < 352) {
                 uint256 sh = (31 - (idx - 320)) * 8;
-                return uint8(uint256(0x4141434b4c3a3a42424d3b43433c46763d3d474775753e3e464848463f3f4749) >> sh);
+                return uint8(uint256(0x45434543454d4d3c3c444644464e4e453d474545474f4f3e3e464650503f4747) >> sh);
             }
             if (idx >= 352 && idx < 384) {
                 uint256 sh = (31 - (idx - 352)) * 8;
-                return uint8(uint256(0x494040484a484a4141494b494c42424a4c4a1d1d43434b4b1c444c47474f4848) >> sh);
+                return uint8(uint256(0x51404a4a41414b4b42424a4c4a4c43434b4d4b4d44444c4e4c4e45454d4f4d4f) >> sh);
             }
             if (idx >= 384 && idx < 416) {
                 uint256 sh = (31 - (idx - 384)) * 8;
-                return uint8(uint256(0x5049494f514a4a504b4b51545c555d5d56545e5e55575f5f5658565857596161) >> sh);
+                return uint8(uint256(0x46464e504e5047474f4f48505049534a4a544b4b53554c4c54564d4d55574e4e) >> sh);
             }
             if (idx >= 416 && idx < 448) {
                 uint256 sh = (31 - (idx - 416)) * 8;
-                return uint8(uint256(0x585a62625963635a645d5d655e5e66665d5f5d5f67675e565e6868685f61686a) >> sh);
+                return uint8(uint256(0x56584f4f575950505851595c645d65655e5c66665d5f67675e605e605f616969) >> sh);
             }
             if (idx >= 448 && idx < 480) {
                 uint256 sh = (31 - (idx - 448)) * 8;
-                return uint8(uint256(0x5f6168696a696a58626a626a6a616361636b6b62626c6c63636d6e5c66666f5d) >> sh);
+                return uint8(uint256(0x60626a6a616b6b626c65656d66666e6e656765676f6f665e6670707067697072) >> sh);
             }
             if (idx >= 480 && idx < 512) {
                 uint256 sh = (31 - (idx - 480)) * 8;
-                return uint8(uint256(0x5d67675e6866686668705f5f676967697171686a686a686a72726161696b696b) >> sh);
+                return uint8(uint256(0x67697071727172606a726a7272696b696b73736a6a74746b6b75646e6e766565) >> sh);
             }
             if (idx >= 512 && idx < 544) {
                 uint256 sh = (31 - (idx - 512)) * 8;
-                return uint8(uint256(0x73736a626c6a6a6c747563636b6b76646c6c24656f2323666670706f67676f71) >> sh);
+                return uint8(uint256(0x6f6f777766706e706e70787867676f716f7179797072707270727a7a69697173) >> sh);
             }
             if (idx >= 544 && idx < 576) {
                 uint256 sh = (31 - (idx - 544)) * 8;
-                return uint8(uint256(0x7168687072726969717371736a6a727472756b6b73757346466c6c7474456d75) >> sh);
+                return uint8(uint256(0x71737b7b726a747272747c7c6b6b73737d7d6c74747e6d77776e6e78786f6f77) >> sh);
             }
             if (idx >= 576 && idx < 608) {
                 uint256 sh = (31 - (idx - 576)) * 8;
-                return uint8(uint256(0x7070787171797272787a73737974747a7e7e84848a8a27278c807e8c817e8c82) >> sh);
+                return uint8(uint256(0x7977797070787a787a7171797b797b72727a7c7a7c73737b7d7b7d74747c7c75) >> sh);
             }
             if (idx >= 608 && idx < 640) {
                 uint256 sh = (31 - (idx - 608)) * 8;
-                return uint8(uint256(0x808c8c81887e84848080808c8c8c50508684808886848687808686878e8a848a) >> sh);
+                return uint8(uint256(0x7d7d768077778178788082797981837a7a82847b7b83857c7c84867d7d857e86) >> sh);
             }
             if (idx >= 640 && idx < 672) {
                 uint256 sh = (31 - (idx - 640)) * 8;
-                return uint8(uint256(0x8686868080807979868a868d8a868e8c86868c828d7e8a8a8c8c8c8686860000) >> sh);
+                return uint8(uint256(0x8a8a909096962929988c8a988d8a988e8c98988d948a90908c8c8c9898985656) >> sh);
+            }
+            if (idx >= 672 && idx < 704) {
+                uint256 sh = (31 - (idx - 672)) * 8;
+                return uint8(uint256(0x92908c94929092938c9292939a9690969292928c8c8c83839296929996929a98) >> sh);
+            }
+            if (idx >= 704 && idx < 736) {
+                uint256 sh = (31 - (idx - 704)) * 8;
+                return uint8(uint256(0x9292988e998a9696989898929292000000000000000000000000000000000000) >> sh);
             }
         revert("oob");
     }
@@ -961,9 +951,9 @@ library SanrenData {
     }
 
     function gateOf(uint8 seat) internal pure returns (uint8) {
-        if (seat == 0) return 130;
-        if (seat == 1) return 124;
-        return 136;
+        if (seat == 0) return 142;
+        if (seat == 1) return 136;
+        return 148;
     }
 
     // ── 马 ────────────────────────────────────────────────────
@@ -999,22 +989,22 @@ library SanrenData {
     }
 
     function setupAt(uint16 i) internal pure returns (uint8 node, uint8 piece, uint8 seat) {
-        if (i == 0) return (41, 5, 0);
-        if (i == 1) return (42, 4, 0);
-        if (i == 2) return (43, 3, 0);
-        if (i == 3) return (44, 2, 0);
-        if (i == 4) return (45, 1, 0);
-        if (i == 5) return (46, 2, 0);
-        if (i == 6) return (47, 3, 0);
-        if (i == 7) return (48, 4, 0);
-        if (i == 8) return (49, 5, 0);
-        if (i == 9) return (60, 6, 0);
-        if (i == 10) return (66, 6, 0);
-        if (i == 11) return (68, 7, 0);
-        if (i == 12) return (70, 7, 0);
-        if (i == 13) return (72, 7, 0);
-        if (i == 14) return (74, 7, 0);
-        if (i == 15) return (76, 7, 0);
+        if (i == 0) return (45, 5, 0);
+        if (i == 1) return (46, 4, 0);
+        if (i == 2) return (47, 3, 0);
+        if (i == 3) return (48, 2, 0);
+        if (i == 4) return (49, 1, 0);
+        if (i == 5) return (50, 2, 0);
+        if (i == 6) return (51, 3, 0);
+        if (i == 7) return (52, 4, 0);
+        if (i == 8) return (53, 5, 0);
+        if (i == 9) return (64, 6, 0);
+        if (i == 10) return (70, 6, 0);
+        if (i == 11) return (72, 7, 0);
+        if (i == 12) return (74, 7, 0);
+        if (i == 13) return (76, 7, 0);
+        if (i == 14) return (78, 7, 0);
+        if (i == 15) return (80, 7, 0);
         if (i == 16) return (0, 5, 1);
         if (i == 17) return (1, 4, 1);
         if (i == 18) return (2, 3, 1);
@@ -1031,22 +1021,22 @@ library SanrenData {
         if (i == 29) return (31, 7, 1);
         if (i == 30) return (33, 7, 1);
         if (i == 31) return (35, 7, 1);
-        if (i == 32) return (82, 5, 2);
-        if (i == 33) return (83, 4, 2);
-        if (i == 34) return (84, 3, 2);
-        if (i == 35) return (85, 2, 2);
-        if (i == 36) return (86, 1, 2);
-        if (i == 37) return (87, 2, 2);
-        if (i == 38) return (88, 3, 2);
-        if (i == 39) return (89, 4, 2);
-        if (i == 40) return (90, 5, 2);
-        if (i == 41) return (101, 6, 2);
-        if (i == 42) return (107, 6, 2);
-        if (i == 43) return (109, 7, 2);
-        if (i == 44) return (111, 7, 2);
-        if (i == 45) return (113, 7, 2);
-        if (i == 46) return (115, 7, 2);
-        if (i == 47) return (117, 7, 2);
+        if (i == 32) return (90, 5, 2);
+        if (i == 33) return (91, 4, 2);
+        if (i == 34) return (92, 3, 2);
+        if (i == 35) return (93, 2, 2);
+        if (i == 36) return (94, 1, 2);
+        if (i == 37) return (95, 2, 2);
+        if (i == 38) return (96, 3, 2);
+        if (i == 39) return (97, 4, 2);
+        if (i == 40) return (98, 5, 2);
+        if (i == 41) return (109, 6, 2);
+        if (i == 42) return (115, 6, 2);
+        if (i == 43) return (117, 7, 2);
+        if (i == 44) return (119, 7, 2);
+        if (i == 45) return (121, 7, 2);
+        if (i == 46) return (123, 7, 2);
+        if (i == 47) return (125, 7, 2);
         revert("setup");
     }
 }
