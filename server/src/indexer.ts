@@ -410,7 +410,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
   if (p === "/health") {
     const total = await db.get(`SELECT COUNT(*) AS n FROM games`) as { n: number };
     const finished = (await db.get(`SELECT COUNT(*) AS n FROM games WHERE phase = ?`, [PHASE.Finished])) as { n: number };
-    const players = (await db.get(`SELECT COUNT(DISTINCT player) AS n FROM seats WHERE occupied = 1`)) as { n: number };
+    const players = (await db.get(`SELECT COUNT(DISTINCT player) AS n FROM seats WHERE occupied = TRUE`)) as { n: number };
     const lastScan = await db.get(`SELECT value FROM meta WHERE key='last_scan'`) as
       | { value: string }
       | undefined;
@@ -472,7 +472,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
   const pm = p.match(/^\/players\/(0x[0-9a-fA-F]{40})$/);
   if (pm) {
     const who = pm[1].toLowerCase();
-    const played = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND occupied = 1`, [who])) as { n: number };
+    const played = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND occupied = TRUE`, [who])) as { n: number };
     const won = (await db.get(`SELECT COUNT(*) AS n FROM games g JOIN seats s ON s.game_id = g.game_id AND s.seat = g.winner_seat
          WHERE s.player = ? AND g.phase = ?`, [who, PHASE.Finished])) as { n: number };
     const staked = (await db.get(
@@ -486,7 +486,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
     const points = (await db.get(`SELECT COALESCE(SUM(sp.points_earned),0) AS v FROM seat_points sp
          JOIN seats s ON s.game_id = sp.game_id AND s.seat = sp.seat
          WHERE s.player = ?`, [who])) as { v: number };
-    const slashedTimes = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = 1`, [who])) as { n: number };
+    const slashedTimes = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = TRUE`, [who])) as { n: number };
     const rep = await db.get(`SELECT * FROM reputation WHERE agent = ?`, [who]) as
       | Record<string, unknown>
       | undefined;
@@ -527,11 +527,11 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
                 SUM(CASE WHEN g.winner_seat = s.seat AND g.phase = ? THEN 1 ELSE 0 END) AS wins,
                 COALESCE(SUM(sp.points_earned), 0) AS points,
                 SUM(CAST(s.fees_paid AS INTEGER)) AS fees,
-                SUM(CASE WHEN s.slashed = 1 THEN 1 ELSE 0 END) AS slashed
+                SUM(CASE WHEN s.slashed = TRUE THEN 1 ELSE 0 END) AS slashed
          FROM seats s
          JOIN games g ON g.game_id = s.game_id
          LEFT JOIN seat_points sp ON sp.game_id = s.game_id AND sp.seat = s.seat
-         WHERE s.occupied = 1
+         WHERE s.occupied = TRUE
          GROUP BY s.player
          ORDER BY wins DESC, points DESC
          LIMIT ?`,
