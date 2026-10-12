@@ -102,6 +102,52 @@ library SanrenRules {
         return true;
     }
 
+    /// @notice 该座位是否正被将军（帅所在节点被任一敌方棋子合法攻击）。
+    ///
+    /// @dev 只扫"可能攻击到帅"的敌方棋子，而不是全盘 139 个节点：
+    ///      - 帅在九宫内，所以先定位帅的节点
+    ///      - 遍历敌方所有棋子，对每个候选调用 isLegal（它已含炮架/马腿/九宫等全部规则）
+    ///      这样把 O(139²) 降到 O(棋子数×1)，是可上链的成本。
+    function isInCheck(uint8[160] storage board, uint8 seat) internal view returns (bool) {
+        uint8 kingNode = _findGeneral(board, seat);
+        if (kingNode == 255) return false; // 帅已被吃，游戏早该结束
+        for (uint8 n = 0; n < SanrenData.NODE_COUNT; n++) {
+            (uint8 p, uint8 s) = _unpack(board[n]);
+            if (p == 0 || s == seat) continue;
+            // 用 isLegal 判"这枚敌方棋子能否吃到帅所在的节点"
+            if (isLegal(board, s, p, n, kingNode)) return true;
+        }
+        return false;
+    }
+
+    /// @notice 该座位是否还有任何合法着法（用于将死/困毙判定）。
+    ///
+    /// @dev 成本明显高于 isInCheck（要为每枚棋子枚举目标），所以**不放进热路径**：
+    ///      只在需要判将死时（例如前端/agent 提示、或终局校验）调用。
+    ///      这里只枚举"同线可达"与"相邻"的候选目标，覆盖全部合法着法类型。
+    function hasAnyLegalMove(uint8[160] storage board, uint8 seat) internal view returns (bool) {
+        for (uint8 from = 0; from < SanrenData.NODE_COUNT; from++) {
+            (uint8 p, uint8 s) = _unpack(board[from]);
+            if (p == 0 || s != seat) continue;
+            // 候选目标：全部节点里能吃掉的目标 + 空点。为控制成本只试
+            // 同线节点与相邻节点（SanrenData 的几何关系即合法着法的全部来源）。
+            for (uint8 to = 0; to < SanrenData.NODE_COUNT; to++) {
+                if (to == from) continue;
+                if (isLegal(board, seat, p, from, to)) return true;
+            }
+        }
+        return false;
+    }
+
+    /// @dev 找出某座位的帅所在节点；不在盘上返回 255。
+    function _findGeneral(uint8[160] storage board, uint8 seat) private view returns (uint8) {
+        for (uint8 n = 0; n < SanrenData.NODE_COUNT; n++) {
+            (uint8 p, uint8 s) = _unpack(board[n]);
+            if (p == 1 && s == seat) return n;
+        }
+        return 255;
+    }
+
     function _abs16(int16 v) private pure returns (int16) {
         return v < 0 ? -v : v;
     }

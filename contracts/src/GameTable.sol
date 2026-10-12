@@ -407,6 +407,52 @@ contract GameTable {
         emit MoveCommitted(gameId, seat, commitHash);
     }
 
+    /// @notice 一次交易完成"提交 + 揭示"，用户只需签一次名。
+    ///
+    /// @dev 为什么可以这么做：`revealMove` 本来就要求 `g.turn == seat`，
+    ///      也就是必须轮到你才能交。在这个前提下 commit-reveal 并没有隐藏
+    ///      任何信息 —— 对手在你之后才走，看不到"抢跑"你的机会。所以把两步
+    ///      压成一步不会损失任何安全性，只是把每步两次签名降到一次。
+    ///
+    ///      真要做成暗棋（三座同时提交、再一起揭示），需要把回合推进与
+    ///      超时惩罚一起重写；那是独立的一次改动，见 PRD 的 P0 条目。
+    ///
+    ///      `commitHash` 仍然要求调用方传进来并做校验，保留原语义：
+    ///      调用方必须证明自己知道 (走法, salt) 的承诺，而不是直接塞明文。
+    function commitAndRevealMove(
+        uint256 gameId,
+        uint8 fromX,
+        uint8 fromY,
+        uint8 toX,
+        uint8 toY,
+        uint8 piece,
+        bytes32 salt,
+        bytes32 commitHash
+    ) external {
+        // ⚠️ 必须内联，不能用 this.commitMove()/this.revealMove()：外部调用会把
+        //    msg.sender 变成合约自己，那里面的 `seats[seat].player == msg.sender`
+        //    会立刻失败（实测 "turn"）。下面这几行就是从那两个入口抄来的前置校验。
+        Game storage g = games[gameId];
+        require(g.phase == Phase.Playing, "playing");
+        uint8 seat = g.turn;
+        require(g.seats[seat].player == msg.sender, "turn");
+        require(!g.seats[seat].eliminated, "out");
+        require(g.commits[seat].commitHash == bytes32(0), "pending");
+
+        // 承诺必须与明文一致，否则等同伪造
+        require(
+            commitHash == keccak256(abi.encode(seat, fromX, fromY, toX, toY, piece, salt)),
+            "commit mismatch"
+        );
+
+        g.commits[seat].commitHash = commitHash;
+        g.commits[seat].commitTime = uint64(block.timestamp);
+        g.commits[seat].illegalAttempts = 0;
+        emit MoveCommitted(gameId, seat, commitHash);
+
+        _revealMove(gameId, fromX, fromY, toX, toY, piece, salt);
+    }
+
     function revealMove(
         uint256 gameId,
         uint8 fromX,
@@ -416,6 +462,18 @@ contract GameTable {
         uint8 piece,
         bytes32 salt
     ) external {
+        _revealMove(gameId, fromX, fromY, toX, toY, piece, salt);
+    }
+
+    function _revealMove(
+        uint256 gameId,
+        uint8 fromX,
+        uint8 fromY,
+        uint8 toX,
+        uint8 toY,
+        uint8 piece,
+        bytes32 salt
+    ) internal {
         Game storage g = games[gameId];
         require(g.phase == Phase.Playing, "playing");
         uint8 seat = g.turn;

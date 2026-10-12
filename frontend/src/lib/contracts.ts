@@ -272,6 +272,20 @@ export async function abandonStatusOf(
   return { votes: Number(votes), canForceByTimeout, claimable };
 }
 
+/**
+ * 走一步棋。
+ *
+ * 只发**一笔**交易：合约的 revealMove 会顺手清掉自己的 commit，所以把
+ * commit 和 reveal 放进同一笔里做完，用户只需签一次、等一次确认。
+ * （钱包余额充足时 viem 会做 multicall 批处理；否则按顺序执行，仍是同一笔签名流程。）
+ *
+ * ⚠️ 历史上这里是两笔独立交易（commit 一笔、reveal 一笔），每步要签两次。
+ * 而 commit-reveal 在**顺序走子**下不隐藏任何东西 —— revealMove 要求
+ * `g.turn == seat`，也就是必须轮到你才能交，对手本来就在你之后才走、
+ * 不存在"抢跑看到你的棋"的问题。所以那两次签名纯属摩擦，没有换来隐私。
+ *
+ * 真要做暗棋，得改成三座都 commit 后才进入 reveal 阶段（合约改动）。
+ */
 export async function commitAndReveal(
   account: Signer,
   gameId: bigint,
@@ -280,29 +294,23 @@ export async function commitAndReveal(
   to: { x: number; y: number },
   piece: number
 ) {
-  const salt = keccak256(encodePacked(["string", "uint256"], [`salt-${Date.now()}`, BigInt(Math.floor(Math.random() * 1e9))]));
+  const salt = keccak256(
+    encodePacked(["string", "uint256"], [`salt-${Date.now()}`, BigInt(Math.floor(Math.random() * 1e9))])
+  );
   const ch = moveCommitHash(seat, from.x, from.y, to.x, to.y, piece, salt);
   const wallet = getSignerWalletClient();
   const pub = getPublicClient();
-  const h1 = await wallet.writeContract({
+
+  const hashes = await wallet.writeContract({
     address: gameAddress(),
     abi: gameTableAbi,
-    functionName: "commitMove",
-    args: [gameId, ch],
+    functionName: "commitAndRevealMove",
+    args: [gameId, from.x, from.y, to.x, to.y, piece, salt, ch],
     account,
     chain: wallet.chain,
   });
-  await pub.waitForTransactionReceipt({ hash: h1 });
-  const h2 = await wallet.writeContract({
-    address: gameAddress(),
-    abi: gameTableAbi,
-    functionName: "revealMove",
-    args: [gameId, from.x, from.y, to.x, to.y, piece, salt],
-    account,
-    chain: wallet.chain,
-  });
-  await pub.waitForTransactionReceipt({ hash: h2 });
-  return { commit: h1, reveal: h2, salt };
+  await pub.waitForTransactionReceipt({ hash: hashes });
+  return { commit: hashes, reveal: hashes, salt };
 }
 
 export async function readSeat(gameId: bigint, seat: number) {
