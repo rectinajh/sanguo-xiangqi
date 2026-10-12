@@ -99,6 +99,23 @@ pnpm indexer:once     # 只扫一轮后退出（适合 CI / 定时任务）
 用 `node:sqlite`（Node 22+ 内置，零额外依赖），数据落在 `server/.data/index.sqlite`，
 删掉即可重建。前端面板通过 `VITE_INDEXER_URL` 指向它。
 
+地址文件按 `CHAIN_ID` 自动选择：`CHAIN_ID=10143` 读 `addresses.10143.json`，
+否则读本地 `addresses.json`。指向测试网：
+
+```bash
+RPC_URL=https://testnet-rpc.monad.xyz \
+CHAIN_ID=10143 \
+INDEXER_START_BLOCK=70345306 \
+pnpm indexer
+```
+
+> ⚠️ **公网 RPC 的两个硬限制**（都实测踩过，本地 Anvil 不会暴露）：
+> 1. `eth_getLogs` 的区块区间被限制（Monad 公共 RPC 只允许 **100 个块**）。
+>    索引器已做自适应分块，但仍**不要从创世块扫** —— 7000 万块等于 70 万次请求。
+>    用 `INDEXER_START_BLOCK` 指定部署块（可用二分找：`cast code <地址> --block N`）。
+> 2. 逐节点读盘面（`cell()`）一局要 100+ 次并发调用，会被限流。agent 因此改为
+>    **事件驱动**维护棋盘（`MoveRevealed`），不再整盘读链。
+
 > 注意：合约在终局结算时会把 `points` 用掉（进奖池/孤儿池），结算后链上读到的是 0。
 > 所以索引器另用 `CaptureSettled` / `PointsSeized` 事件累计"累计赚分"，
 > 历史统计一律用这个值，而不是 `getSeat` 的当前 points。

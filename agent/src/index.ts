@@ -14,6 +14,7 @@
  */
 import { encodeAbiParameters, formatEther, keccak256, type Hex } from "viem";
 import {
+  NODE_COUNT,
   Piece,
   SEAT_LABEL_ZH,
   applyMove,
@@ -45,6 +46,10 @@ class MoleAgent {
       betrayed: boolean;
       finished: boolean;
       motivePublished: boolean;
+      /** 事件同步游标：只扫这个块高之后的 MoveRevealed / SeatBankrupt */
+      lastSyncedBlock: bigint;
+      /** 首轮是否已把该局历史事件回填 */
+      backfilled: boolean;
     }
   >();
 
@@ -181,6 +186,14 @@ class MoleAgent {
     const ply = Number(meta[2]);
     const aiRevealed = Boolean(meta[3]);
 
+    // 自动入座：大厅阶段如果我的座位还空着，且余额够，就自己入座。
+    // 这是 agent 能"自己开局"的前提 —— 以前必须由人类先替它 join，
+    // 否则它只会对着空座位永远空转（实测踩过）。
+    if (phase === 0) {
+      await this.ensureSeated(gameId);
+      return;
+    }
+
     const st = this.state.get(gameId) ?? {
       board: initialBoard(),
       lastPly: -1,
@@ -189,6 +202,8 @@ class MoleAgent {
       betrayed: false,
       finished: false,
       motivePublished: false,
+      lastSyncedBlock: 0n,
+      backfilled: false,
     };
     this.state.set(gameId, st);
 
@@ -202,11 +217,13 @@ class MoleAgent {
       return;
     }
 
-    // 状态变化时同步棋盘（棋盘只在 reveal 后变化）
-    if (ply !== st.lastPly) {
-      st.board = await this.readBoard(gameId);
-      st.lastPly = ply;
-    }
+    // 棋盘状态由事件增量维护。
+    //
+    // 为什么不用"整盘读链"：GameTable.cell() 是逐节点读的，一局要 121+ 次 RPC。
+    // 并发打完会被公共 RPC 限流（实测 Monad 测试网直接 RPC Request failed），
+    // agent 就卡在 tick 出错里一动不动。改成事件驱动：启动回填一次历史事件，
+    // 之后每个 tick 只扫新增区块。
+    await this.syncBoardFromEvents(gameId, st);
 
     await this.syncCovenant(gameId, st);
 
@@ -216,46 +233,131 @@ class MoleAgent {
     await this.playOneMove(gameId, st, ply);
   }
 
-  private async readBoard(gameId: bigint): Promise<BoardState> {
-    const b = initialBoard();
-    const cells = await Promise.all(
-      Array.from({ length: 11 }, (_, y) =>
-        Promise.all(
-          Array.from({ length: 11 }, (_, x) =>
-            this.ctx.pub.readContract({
-              address: this.cfg.addresses.GameTable,
-              abi: ABIS.GameTable,
-              functionName: "cell",
-              args: [gameId, x, y],
-            }) as Promise<readonly [number, number]>
-          )
-        )
-      )
-    );
-    for (let y = 0; y < 11; y++) {
-      for (let x = 0; x < 11; x++) {
-        const [piece, seatOr255] = cells[y][x];
-        b.cells[y][x] = {
-          piece: piece as Piece,
-          seat: seatOr255 === 255 ? null : (seatOr255 as Seat),
-        };
+  /** 我的座位是否已入座；没有就自己入座（需要余额 ≥ JOIN_VALUE）。 */
+  private async ensureSeated(gameId: bigint) {
+    const JOIN_VALUE = 3n * 10n ** 18n; // 1 MON 质押 + 2 MON 作战
+
+    const mine = (await this.ctx.pub.readContract({
+      address: this.cfg.addresses.GameTable,
+      abi: ABIS.GameTable,
+      functionName: "getSeat",
+      args: [gameId, this.seat],
+    })) as readonly [string, bigint, bigint, number, boolean];
+    if (mine[0].toLowerCase() === this.ctx.account.address.toLowerCase()) return; // 已入座
+    if (mine[0] !== "0x0000000000000000000000000000000000000000") return; // 被别人占了
+
+    const bal = await this.ctx.pub.getBalance({ address: this.ctx.account.address });
+    if (bal < JOIN_VALUE) {
+      this.say(
+        `局 ${gameId}：座位 ${this.seat} 空着，但余额只有 ${formatEther(bal)} MON，` +
+          `不够入座（需 ${formatEther(JOIN_VALUE)} MON）`
+      );
+      return;
+    }
+
+    try {
+      const h = await this.ctx.wallet.writeContract({
+        address: this.cfg.addresses.GameTable,
+        abi: ABIS.GameTable,
+        functionName: "join",
+        args: [gameId, this.seat],
+        value: JOIN_VALUE,
+        account: this.ctx.account,
+        chain: this.ctx.chain,
+      });
+      await this.ctx.pub.waitForTransactionReceipt({ hash: h });
+      this.say(`局 ${gameId}：已自动入座 ${this.seat}(绿营)，锁定 ${formatEther(JOIN_VALUE)} MON`);
+    } catch (e) {
+      this.say(`局 ${gameId}：入座失败 ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+
+  /**
+   * 用链上事件增量维护棋盘。
+   *
+   * 事件是唯一真源（前端可伪显示、cell() 逐点读又太贵），所以：
+   *   - 开局先把该局的 MoveRevealed 回填一遍，重建到当前局面
+   *   - 之后每个 tick 只扫 lastSyncedBlock 之后的新区块
+   *
+   * MoveRevealed 带 piece，直接用 applyMove 落到本地盘面，位置语义与合约一致。
+   * SeatBankrupt 用来同步"谁出局了"，避免 agent 对着已出局的座位空等。
+   */
+  private async syncBoardFromEvents(
+    gameId: bigint,
+    st: {
+      board: BoardState;
+      lastPly: number;
+      lastSyncedBlock: bigint;
+      backfilled: boolean;
+    }
+  ) {
+    const latest = await this.ctx.pub.getBlockNumber();
+    const from = st.backfilled ? st.lastSyncedBlock + 1n : 0n;
+    if (from > latest) return;
+
+    // 首次回填时从 0 开始；若 RPC 对区间有限制，失败就退回"从现在开始"
+    let logs: readonly { args?: unknown }[];
+    try {
+      logs = (await this.ctx.pub.getContractEvents({
+        address: this.cfg.addresses.GameTable,
+        abi: ABIS.GameTable,
+        eventName: "MoveRevealed",
+        args: { gameId },
+        fromBlock: from,
+        toBlock: latest,
+      })) as readonly { args?: unknown }[];
+    } catch {
+      if (!st.backfilled) {
+        // 回填失败：退化成"从当前块开始"，至少不会卡死
+        st.backfilled = true;
+        st.lastSyncedBlock = latest;
+      }
+      return;
+    }
+
+    for (const e of logs) {
+      const a = (e.args ?? {}) as {
+        fromX?: number;
+        fromY?: number;
+        toX?: number;
+        toY?: number;
+        piece?: number;
+        seat?: number;
+      };
+      if (a.seat === undefined || a.fromX === undefined || a.toX === undefined) continue;
+      const seat = Number(a.seat) as Seat;
+      const from = { x: Number(a.fromX), y: Number(a.fromY ?? 0) };
+      const to = { x: Number(a.toX), y: Number(a.toY ?? 0) };
+      try {
+        const r = applyMove(st.board, seat, from, to);
+        st.board = r.board;
+        st.lastPly = st.board.ply;
+      } catch {
+        // 本地盘面与链上不同步时不要中断整个 agent，记一笔继续
+        this.say(`局 ${gameId}：事件重放失败 (${from.x}→${to.x})，跳过`);
       }
     }
-    const seatViews = await Promise.all(
-      ([0, 1, 2] as Seat[]).map(
-        (s) =>
-          this.ctx.pub.readContract({
-            address: this.cfg.addresses.GameTable,
-            abi: ABIS.GameTable,
-            functionName: "getSeat",
-            args: [gameId, s],
-          }) as Promise<readonly [string, bigint, bigint, number, boolean]>
-      )
-    );
-    b.eliminated = seatViews.map((s) => s[4]);
-    b.ply = this.state.get(gameId)?.lastPly ?? 0;
-    b.turn = this.seat;
-    return b;
+
+    // 出局信息（破产由他人触发时 agent 需要知道）
+    try {
+      const bankrupt = await this.ctx.pub.getContractEvents({
+        address: this.cfg.addresses.GameTable,
+        abi: ABIS.GameTable,
+        eventName: "SeatBankrupt",
+        args: { gameId },
+        fromBlock: from,
+        toBlock: latest,
+      });
+      for (const e of bankrupt as readonly { args?: unknown }[]) {
+        const a = (e.args ?? {}) as { seat?: number };
+        if (a.seat !== undefined) st.board.eliminated[Number(a.seat) as Seat] = true;
+      }
+    } catch {
+      /* 出局同步失败不致命 */
+    }
+
+    st.backfilled = true;
+    st.lastSyncedBlock = latest;
   }
 
   /** 读回我参与的盟约（第三方读不到，AI 作为当事人可以） */
@@ -361,7 +463,7 @@ class MoleAgent {
       ripe &&
       allySeat !== null &&
       pick.capture === Piece.Advisor &&
-      board.cells[pick.to.y][pick.to.x].seat === allySeat;
+      board.cells[pick.to.x].seat === allySeat;
 
     if (allyHit) {
       st.betrayed = true;
@@ -391,11 +493,8 @@ class MoleAgent {
     // 具体是谁由已有盟约决定，这里取第一个有士在场的对手。
     for (const s of [0, 1, 2] as Seat[]) {
       if (s === this.seat) continue;
-      for (let y = 0; y < 11; y++) {
-        for (let x = 0; x < 11; x++) {
-          const c = board.cells[y][x];
-          if (c.seat === s && c.piece === Piece.Advisor) return s;
-        }
+      for (const c of board.cells) {
+        if (c.seat === s && c.piece === Piece.Advisor) return s;
       }
     }
     return null;
@@ -415,7 +514,7 @@ class MoleAgent {
   }
 
   private async commitAndReveal(gameId: bigint, move: LegalMove) {
-    const piece = this.state.get(gameId)!.board.cells[move.from.y][move.from.x].piece;
+    const piece = this.state.get(gameId)!.board.cells[move.from.x].piece;
     const salt = `0x${Buffer.from(`agent-${gameId}-${Date.now()}-${Math.random()}`)
       .toString("hex")
       .padEnd(64, "0")

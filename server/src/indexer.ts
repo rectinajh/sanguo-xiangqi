@@ -18,7 +18,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { createPublicClient, defineChain, http, formatEther, type Abi, type Hex, type PublicClient } from "viem";
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readGame, readReputation, PHASE, type GameSnapshot } from "./reader.js";
@@ -40,14 +40,35 @@ type Config = {
   intervalMs: number;
   /** 一次扫描最多回溯多少个 gameId（防止对局数很大时拖慢） */
   maxScan: number;
+  /**
+   * 事件日志的起始块。
+   *
+   * 公共 RPC 会限制 eth_getLogs 的区间（Monad 公共 RPC 实测只允许 100 个块），
+   * 所以不可能"从 0 全量扫"。默认只回溯最近 INDEXER_LOOKBACK_BLOCKS 个块，
+   * 需要从头重建时用 INDEXER_START_BLOCK 显式指定部署块。
+   */
+  startBlock: bigint;
   once: boolean;
 };
 
+/**
+ * 按 chainId 选择地址文件。
+ *
+ * deploy:testnet 写的是 addresses.10143.json，deploy:local 写的是 addresses.json。
+ * 早期这里硬编码只读后者，于是 `CHAIN_ID=10143 pnpm indexer` 会拿 Anvil 的地址
+ * 去问 Monad 测试网，报 "nextGameId returned no data" —— 部署完测试网却接不上索引。
+ */
+function addressesFileFor(chainId: number): string {
+  const dir = path.join(repoRoot, "frontend/src/lib");
+  const perChain = path.join(dir, `addresses.${chainId}.json`);
+  return existsSync(perChain) ? perChain : path.join(dir, "addresses.json");
+}
+
 function loadConfig(): Config {
   const env = process.env;
-  const file = JSON.parse(
-    readFileSync(path.join(repoRoot, "frontend/src/lib/addresses.json"), "utf8")
-  ) as Record<string, string>;
+  const chainId = Number(env.CHAIN_ID ?? 0);
+  const filePath = addressesFileFor(chainId);
+  const file = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, string>;
   const pick = (envKey: string, fileKey: string) => {
     const v = env[envKey];
     return (v && v.length > 0 ? v : file[fileKey] ?? "") as string;
@@ -59,7 +80,11 @@ function loadConfig(): Config {
     ["AgentRegistry", registry],
   ] as const) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(v)) {
-      throw new Error(`${k} 地址无效：${v || "(空)"}。先跑 pnpm deploy:local 或配置 VITE_* 环境变量。`);
+      throw new Error(
+        `${k} 地址无效：${v || "(空)"}。\n` +
+          `  用的地址文件：${filePath}\n` +
+          `  先跑 pnpm deploy:local / pnpm deploy:testnet，或用 VITE_* 环境变量显式指定。`
+      );
     }
   }
   return {
@@ -71,6 +96,7 @@ function loadConfig(): Config {
     dbPath: env.INDEXER_DB ?? path.join(repoRoot, "server/.data/index.sqlite"),
     intervalMs: Number(env.INDEXER_INTERVAL_MS ?? 4000),
     maxScan: Number(env.INDEXER_MAX_SCAN ?? 2000),
+    startBlock: 0n, // 占位，扫描时按最新块与 lookback 现算
     once: process.argv.includes("--once"),
   };
 }
@@ -152,6 +178,54 @@ function openDb(dbPath: string): DatabaseSync {
  *
  * 幂等：每个 (gameId, seat) 只按"事件最大值"更新，重复扫描同一局不会翻倍。
  */
+/**
+ * 分块拉取事件日志。
+ *
+ * 公共 RPC 普遍限制 eth_getLogs 的区块区间（实测 Monad 测试网公共 RPC：
+ * "eth_getLogs is limited to a 100 range"）。如果还按"从 0 扫到最新块"发一次请求，
+ * 在测试网上会直接失败 —— 索引器刚连上测试网就崩。
+ *
+ * 所以这里按块分片拉，并且在被拒时**自动收缩片长**（不同 RPC 限制不同，
+ * 硬编码一个值迟早会撞上别的链）。
+ */
+async function getEventsChunked(
+  pub: PublicClient,
+  opts: {
+    address: Hex;
+    abi: Abi;
+    eventName: string;
+    fromBlock: bigint;
+    toBlock: bigint;
+  }
+): Promise<{ args?: unknown }[]> {
+  const out: { args?: unknown }[] = [];
+  let chunk = 100n; // 保守起点：Monad 公共 RPC 就是 100
+  let cur = opts.fromBlock;
+
+  while (cur <= opts.toBlock) {
+    const end = cur + chunk - 1n > opts.toBlock ? opts.toBlock : cur + chunk - 1n;
+    try {
+      const logs = (await pub.getContractEvents({
+        address: opts.address,
+        abi: opts.abi,
+        eventName: opts.eventName as never,
+        fromBlock: cur,
+        toBlock: end,
+      })) as readonly { args?: unknown }[];
+      out.push(...logs);
+      cur = end + 1n;
+    } catch (e) {
+      // 区间被拒就收缩；收到 1 个块还失败说明不是区间问题，直接抛出
+      if (chunk > 1n) {
+        chunk = chunk / 2n;
+        continue;
+      }
+      throw e;
+    }
+  }
+  return out;
+}
+
 async function scanPoints(
   pub: PublicClient,
   cfg: Config,
@@ -162,14 +236,14 @@ async function scanPoints(
 ) {
   if (fromBlock > toBlock) return;
   const [settled, seized] = await Promise.all([
-    pub.getContractEvents({
+    getEventsChunked(pub, {
       address: cfg.gameTable,
       abi: gameAbi,
       eventName: "CaptureSettled",
       fromBlock,
       toBlock,
     }),
-    pub.getContractEvents({
+    getEventsChunked(pub, {
       address: cfg.gameTable,
       abi: gameAbi,
       eventName: "PointsSeized",
@@ -323,7 +397,14 @@ async function scanOnce(
     | { value: string }
     | undefined;
   const latest = await pub.getBlockNumber();
-  const fromBlock = fromRow ? BigInt(fromRow.value) + 1n : 0n;
+  // 首次扫描的起点：显式配置优先，否则只回溯最近 N 个块。
+  // 为什么不能从 0 开始：公共 RPC 限制 getLogs 区间（Monad 实测 100 块），
+  // 从 0 扫到 7000 万块等于 70 万次请求，永远追不上。
+  const envStart = process.env.INDEXER_START_BLOCK;
+  const lookback = BigInt(process.env.INDEXER_LOOKBACK_BLOCKS ?? 50_000);
+  const defaultStart = latest > lookback ? latest - lookback : 0n;
+  const firstStart = envStart ? BigInt(envStart) : defaultStart;
+  const fromBlock = fromRow ? BigInt(fromRow.value) + 1n : firstStart;
   if (fromBlock <= latest) {
     await scanPoints(pub, cfg, db, gameAbi, fromBlock, latest);
     db.prepare(
