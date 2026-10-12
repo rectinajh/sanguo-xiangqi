@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BoardState,
   Coord,
@@ -27,7 +27,8 @@ import { HowToPlay, hasSeenHowTo, markHowToSeen } from "./components/HowToPlay";
 import { AllianceModal } from "./components/AllianceModal";
 import { EndgameReveal } from "./components/EndgameReveal";
 import { PlayerProfile } from "./components/PlayerProfile";
-import { ToastHost, type ToastItem } from "./components/Toast";
+import { ToastHost } from "./components/Toast";
+import { useToasts } from "./hooks/useToasts";
 import {
   loadOrCreateWallet,
   toAccount,
@@ -89,7 +90,6 @@ import {
   type CovenantPreimage,
 } from "./lib/contracts";
 
-type LogItem = { t: string; hl?: boolean };
 type DemoStep = { id: string; label: string; done: boolean; current: boolean };
 
 const AI_SEAT: Seat = 2;
@@ -128,12 +128,13 @@ function popcount3(mask: number): number {
 }
 
 export default function App() {
+  // 提示系统（日志 + toast）抽到 hooks/useToasts，见那里的注释
+  const { logs, toasts, log, toast } = useToasts();
+
   const [connected, setConnected] = useState(false);
   const [chainOk, setChainOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("准备中");
-  const [logs, setLogs] = useState<LogItem[]>([]);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const [wallets, setWallets] = useState<{
     humanA?: SessionWallet;
@@ -217,16 +218,6 @@ export default function App() {
   /** 轮询 effect 通过 ref 取最新的刷新函数与房间号，避免闭包拿到过期值 */
   const refreshRef = useRef<((id: bigint, silent?: boolean) => Promise<void>) | null>(null);
   const roomRef = useRef<bigint | null>(null);
-
-  const log = useCallback((t: string, hl?: boolean) => {
-    setLogs((prev) => [{ t, hl }, ...prev].slice(0, 40));
-  }, []);
-
-  const toast = useCallback((title: string, body?: string, kind?: "slash" | "info") => {
-    const id = `${Date.now()}-${Math.random()}`;
-    setToasts((p) => [...p, { id, title, body, kind }]);
-    setTimeout(() => setToasts((p) => p.filter((x) => x.id !== id)), 4500);
-  }, []);
 
   // 打开带邀请链接的页面时，自动进入对应房间
   useEffect(() => {
