@@ -7,9 +7,28 @@ import {GameTable} from "../src/GameTable.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
 import {StubVerifier} from "../src/verifiers/StubVerifier.sol";
 
+/// @dev 正式开局马归位；背刺几何测试把绿马临时放到可一步吃红士的点。
+/// @dev 测试用派生合约。
+/// 注意：绿马现在由 SanrenData 的初始布局**直接摆到 63**（见 gen-sanren-solidity.ts），
+/// 所以这里不再需要"从 82 挪到 63"。旧版这里无条件搬一次，而 82 已经是空的，
+/// 结果把 63 上的马复制成 0 —— 马被抹掉，背刺着法变成 illegal geom。
+/// 这里改成幂等：只在 63 上没有绿马时才搬。
+contract GameTableHarness is GameTable {
+    constructor(address registry_) GameTable(registry_) {}
+
+    function plantDemoBetrayalHorse(uint256 gameId) external {
+        Game storage g = games[gameId];
+        uint8 horseHome = 82;
+        uint8 horseAt = 63;
+        if (g.board[horseAt] != 0) return; // 已经就位，别覆盖
+        g.board[horseAt] = g.board[horseHome];
+        g.board[horseHome] = 0;
+    }
+}
+
 contract CovenantTest is Test {
     Covenant cov;
-    GameTable game;
+    GameTableHarness game;
     AgentRegistry reg;
     StubVerifier ver;
     uint256 keyA = 0xA11;
@@ -25,7 +44,7 @@ contract CovenantTest is Test {
         c = vm.addr(keyC);
         ver = new StubVerifier();
         reg = new AgentRegistry();
-        game = new GameTable(address(reg));
+        game = new GameTableHarness(address(reg));
         cov = new Covenant(address(ver));
         reg.setGameTable(address(game));
         cov.setGameTable(address(game));
@@ -45,6 +64,7 @@ contract CovenantTest is Test {
         game.join{value: 3 ether}(id, 1);
         vm.prank(c);
         game.join{value: 3 ether}(id, 2);
+        game.plantDemoBetrayalHorse(id);
         // 声誉注册表不再自动注册陌生地址，AI 座位要显式注册，否则
         // finalizeGame 里的 recordGameResult 会被 catch 吞掉、声誉写不进去。
         vm.prank(c);
@@ -152,9 +172,9 @@ contract CovenantTest is Test {
         vm.expectRevert(bytes("no capture"));
         cov.challengeBetrayal(hash, sj, 1);
 
-        _move(id, keyA, 0, 5, 7, 5, 6, 7);
-        _move(id, keyB, 1, 3, 1, 4, 1, 7);
-        _move(id, keyC, 2, 6, 9, 4, 10, 4);
+        _move(id, keyA, 0, 72, 0, 78, 0, 7);
+        _move(id, keyB, 1, 31, 0, 38, 0, 7);
+        _move(id, keyC, 2, 63, 0, 44, 0, 4); // green horse takes red advisor
 
         (,, uint256 playBefore,,) = game.getSeat(id, si);
         vm.prank(a);
@@ -309,9 +329,9 @@ contract CovenantTest is Test {
         cov.activateCovenant{value: 0.2 ether}(p, sigA, sigC, ""); // 0.15 自己那半 + 0.05 替发起方补齐
 
         // 制造真实的"吃盟友士"证据：绿方（c）的马吃红方（a）的士
-        _move(id, keyA, 0, 5, 7, 5, 6, 7);
-        _move(id, keyB, 1, 3, 1, 4, 1, 7);
-        _move(id, keyC, 2, 6, 9, 4, 10, 4);
+        _move(id, keyA, 0, 72, 0, 78, 0, 7);
+        _move(id, keyB, 1, 31, 0, 38, 0, 7);
+        _move(id, keyC, 2, 63, 0, 44, 0, 4); // green horse takes red advisor
 
         // 记录角色：seatI/seatJ 由 actualSeats 反推，preimage 里 seatI 对应签名里的 a
         // 合约契约：proposer = 锁诚意金的人（c）；counterparty = 另一方（a）。
