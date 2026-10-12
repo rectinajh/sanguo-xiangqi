@@ -17,6 +17,8 @@ type Props = {
   refreshKey?: number;
   /** 点某一局时回调（用于查看/跳转） */
   onPickGame?: (gameId: number) => void;
+  /** 点地址打开玩家战绩 */
+  onOpenPlayer?: (address: string) => void;
 };
 
 type Tab = "games" | "board";
@@ -30,7 +32,7 @@ const winnerText = (g: IndexedGame) =>
  * 数据来自链下索引器（server/src/indexer.ts），因为合约本身没有"列表"能力。
  * 索引器不可用时面板要优雅降级（给出启动命令），而不是报错或空白。
  */
-export function HistoryPanel({ refreshKey = 0, onPickGame }: Props) {
+export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props) {
   const [tab, setTab] = useState<Tab>("games");
   const [games, setGames] = useState<IndexedGame[] | null>(null);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
@@ -174,7 +176,7 @@ export function HistoryPanel({ refreshKey = 0, onPickGame }: Props) {
                   <span style={{ color: "var(--muted)" }}>胜/局</span>
                   <span style={{ color: "var(--muted)" }}>烧油</span>
                   {board.map((r, i) => (
-                    <Row key={r.player} rank={i + 1} row={r} />
+                    <Row key={r.player} rank={i + 1} row={r} onOpenPlayer={onOpenPlayer} />
                   ))}
                 </div>
               )}
@@ -189,12 +191,34 @@ export function HistoryPanel({ refreshKey = 0, onPickGame }: Props) {
   );
 }
 
-function Row({ rank, row }: { rank: number; row: LeaderboardRow }) {
+function Row({
+  rank,
+  row,
+  onOpenPlayer,
+}: {
+  rank: number;
+  row: LeaderboardRow;
+  onOpenPlayer?: (a: string) => void;
+}) {
   return (
     <>
       <span style={{ color: rank === 1 ? "var(--gold)" : "var(--muted)" }}>{rank}</span>
-      <span title={row.player}>
-        {shortAddr(row.player)}
+      <span>
+        <button
+          className="ghost"
+          title={row.player}
+          disabled={!onOpenPlayer}
+          onClick={() => onOpenPlayer?.(row.player)}
+          style={{
+            padding: 0,
+            font: "inherit",
+            color: "inherit",
+            textDecoration: onOpenPlayer ? "underline dotted" : "none",
+            cursor: onOpenPlayer ? "pointer" : "default",
+          }}
+        >
+          {shortAddr(row.player)}
+        </button>
         {row.timesSlashed > 0 ? " ⚔" : ""}
       </span>
       <span>

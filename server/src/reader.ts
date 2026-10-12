@@ -134,23 +134,43 @@ export type Reputation = {
   metadataURI: string;
 };
 
+/**
+ * 读取 AgentRegistry 的声誉。
+ *
+ * ⚠️ viem 对**单个 struct 返回值**会解码成带名字的对象
+ * （{games, wins, slashed, …}），而不是数组。早期这里按下标 r[0]/r[6] 读，
+ * 结果每个字段都是 NaN、registered 恒为 false —— 索引器因此从不写声誉表，
+ * 玩家主页永远显示不出声誉。这里同时兼容两种形态。
+ */
 export async function readReputation(pub: PublicClient, address: Hex, abi: Abi, who: Hex): Promise<Reputation> {
   const r = (await pub.readContract({
     address,
     abi,
     functionName: "getReputation",
     args: [who],
-  })) as readonly [number, number, number, number, number, bigint, boolean, string];
+  })) as unknown;
+
+  const pick = (idx: number, name: string): unknown => {
+    if (Array.isArray(r)) return (r as unknown[])[idx];
+    if (r && typeof r === "object") {
+      const o = r as Record<string, unknown>;
+      if (name in o) return o[name];
+      // 有些 viem 版本会给出数字键
+      if (String(idx) in o) return o[String(idx)];
+    }
+    return undefined;
+  };
+
   return {
     agent: who,
-    games: Number(r[0]),
-    wins: Number(r[1]),
-    slashed: Number(r[2]),
-    betrayalIndex: Number(r[3]),
-    trustScore: Number(r[4]),
-    forcedBurnMonTotal: r[5],
-    registered: Boolean(r[6]),
-    metadataURI: r[7],
+    games: Number(pick(0, "games") ?? 0),
+    wins: Number(pick(1, "wins") ?? 0),
+    slashed: Number(pick(2, "slashed") ?? 0),
+    betrayalIndex: Number(pick(3, "betrayalIndex") ?? 0),
+    trustScore: Number(pick(4, "trustScore") ?? 0),
+    forcedBurnMonTotal: BigInt((pick(5, "forcedBurnMonTotal") as bigint | undefined) ?? 0n),
+    registered: Boolean(pick(6, "registered")),
+    metadataURI: String(pick(7, "metadataURI") ?? ""),
   };
 }
 

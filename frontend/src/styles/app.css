@@ -131,9 +131,9 @@ button.danger {
 .board-wrap { position: relative; }
 .sanren {
   width: 100%;
-  max-width: 680px;
+  max-width: 720px;
   margin: 0 auto;
-  background: #f3ecdf;
+  background: #f7f4ef;
   border-radius: 2px;
   box-shadow: 0 10px 28px rgba(80, 30, 30, 0.18);
 }

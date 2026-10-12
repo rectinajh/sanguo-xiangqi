@@ -9,7 +9,7 @@ import {
 import gameAbi from "../abi/GameTable.json";
 import covAbi from "../abi/Covenant.json";
 import regAbi from "../abi/AgentRegistry.json";
-import { BOARD_H, BOARD_W, Piece, type BoardState, type Seat } from "@sanguo/shared";
+import { NODE_COUNT, Piece, type BoardState, type Seat } from "@sanguo/shared";
 import { addresses, getPublicClient, getWalletClient, getSignerWalletClient, type Signer } from "./chain";
 export const gameTableAbi = gameAbi as any;
 export const covenantAbi = covAbi as any;
@@ -270,43 +270,23 @@ export async function readSeat(gameId: bigint, seat: number) {
 
 export async function readBoard(gameId: bigint): Promise<BoardState> {
   const pub = getPublicClient();
-  const contracts = [];
-  for (let y = 0; y < BOARD_H; y++) {
-    for (let x = 0; x < BOARD_W; x++) {
-      contracts.push({
+  // Fresh Anvil has no Multicall3. Read each node: cell(gameId, nodeId, 0).
+  const packed = await Promise.all(
+    Array.from({ length: NODE_COUNT }, (_, node) =>
+      pub.readContract({
         address: gameAddress(),
         abi: gameTableAbi,
-        functionName: "cell" as const,
-        args: [gameId, x, y] as const,
-      });
-    }
-  }
-  // Fresh Anvil has no Multicall3. Read each cell directly.
-  const packed = await Promise.all(
-    contracts.map(
-      (c) =>
-        pub.readContract({
-          address: c.address,
-          abi: c.abi,
-          functionName: "cell",
-          args: c.args,
-        }) as Promise<readonly [number, number]>
+        functionName: "cell",
+        args: [gameId, node, 0],
+      }) as Promise<readonly [number, number]>
     )
   );
   const meta = await readMeta(gameId);
   const seatViews = await Promise.all([0, 1, 2].map((s) => readSeat(gameId, s)));
-  const cells: BoardState["cells"] = [];
-  for (let y = 0; y < BOARD_H; y++) {
-    const row = [];
-    for (let x = 0; x < BOARD_W; x++) {
-      const [piece, seatOr255] = packed[y * BOARD_W + x];
-      row.push({
-        piece: piece as Piece,
-        seat: seatOr255 === 255 ? null : (seatOr255 as Seat),
-      });
-    }
-    cells.push(row);
-  }
+  const cells: BoardState["cells"] = packed.map(([piece, seatOr255]) => ({
+    piece: piece as Piece,
+    seat: seatOr255 === 255 ? null : (seatOr255 as Seat),
+  }));
   return {
     cells,
     turn: meta.turn,

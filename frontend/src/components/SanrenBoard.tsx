@@ -40,7 +40,7 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
 
   return (
     <div className="sanren">
-      <svg viewBox={vb.join(" ")} role="img" aria-label="三人象棋棋盘">
+      <svg viewBox={vb.join(" ")} role="img" aria-label="三国围棋棋盘">
         <defs>
           <filter id="sanrenShadow" x="-40%" y="-40%" width="180%" height="180%">
             <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#3a2a22" floodOpacity="0.28" />
@@ -59,8 +59,8 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
           <text x={-0.6 * U} y={-5.85 * U} fontSize={0.85 * U}>棋</text>
           <text x={0.6 * U} y={-5.85 * U} fontSize={0.85 * U}>盘</text>
           <text x={-5.75 * U} y={3.55 * U} fontSize={0.95 * U}>三</text>
-          <text x={-5.75 * U} y={4.75 * U} fontSize={0.95 * U}>人</text>
-          <text x={5.75 * U} y={3.55 * U} fontSize={0.95 * U}>象</text>
+          <text x={-5.75 * U} y={4.75 * U} fontSize={0.95 * U}>国</text>
+          <text x={5.75 * U} y={3.55 * U} fontSize={0.95 * U}>围</text>
           <text x={5.75 * U} y={4.75 * U} fontSize={0.95 * U}>棋</text>
         </g>
 

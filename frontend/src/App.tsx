@@ -19,6 +19,7 @@ import { ScorePanel, type SeatView } from "./components/ScorePanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { AllianceModal } from "./components/AllianceModal";
 import { EndgameReveal } from "./components/EndgameReveal";
+import { PlayerProfile } from "./components/PlayerProfile";
 import { ToastHost, type ToastItem } from "./components/Toast";
 import {
   loadOrCreateWallet,
@@ -162,6 +163,8 @@ export default function App() {
   const [faucetUp, setFaucetUp] = useState<boolean | null>(null);
   const [faucetBusy, setFaucetBusy] = useState(false);
   const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 正在查看战绩的地址；null 表示关闭玩家主页 */
+  const [profileAddress, setProfileAddress] = useState<string | null>(null);
   /** 历史面板刷新键：每次终局 +1，让面板不用等轮询就能更新 */
   const [historyRefresh, setHistoryRefresh] = useState(0);
   /** 轮询 effect 通过 ref 取最新的刷新函数与房间号，避免闭包拿到过期值 */
@@ -1007,9 +1010,14 @@ export default function App() {
         </div>
 
         <div className="sidebar">
-          <ScorePanel seats={seats.map((s) => ({ ...s, isYou: s.seat === activeSeat }))} turn={turn} playing={phase === 1} />
+          <ScorePanel
+            seats={seats.map((s) => ({ ...s, isYou: s.seat === activeSeat }))}
+            turn={turn}
+            playing={phase === 1}
+            onOpenPlayer={setProfileAddress}
+          />
 
-          <HistoryPanel refreshKey={historyRefresh} />
+          <HistoryPanel refreshKey={historyRefresh} onOpenPlayer={setProfileAddress} />
 
           {!isLocalDemo && (
             <div className="panel">
@@ -1231,8 +1239,11 @@ export default function App() {
         trustScore={trustScore}
         slashed={slashedCount}
         forcedBurn={forcedBurn}
+        gameId={gameId}
+        onOpenPlayer={setProfileAddress}
         onClose={() => setRevealOpen(false)}
       />
+      <PlayerProfile address={profileAddress} onClose={() => setProfileAddress(null)} />
       <ToastHost items={toasts} />
     </div>
   );
