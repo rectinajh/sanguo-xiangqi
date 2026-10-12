@@ -12,12 +12,16 @@ import {
   initialBoard,
   legalMoves,
   pickAiMove,
+  threatState,
   type LegalMove,
+  type ThreatState,
 } from "@sanguo/shared";
 import { keccak256, encodePacked, parseEther, type Hex, type Account } from "viem";
 import { Board } from "./components/Board";
 import { ScorePanel, type SeatView } from "./components/ScorePanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { StatusBar } from "./components/StatusBar";
+import { HowToPlay, hasSeenHowTo, markHowToSeen } from "./components/HowToPlay";
 import { AllianceModal } from "./components/AllianceModal";
 import { EndgameReveal } from "./components/EndgameReveal";
 import { PlayerProfile } from "./components/PlayerProfile";
@@ -172,6 +176,8 @@ export default function App() {
   const [inviteCopied, setInviteCopied] = useState(false);
   /** 水龙头状态（服务端是否可达 + 剩余可发次数） */
   const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 新手指引：首次访问自动弹一次 */
+  const [howToOpen, setHowToOpen] = useState(() => !hasSeenHowTo());
   /** 放弃投票状态（合约里每个座要投票，或等超时） */
   const [abandonInfo, setAbandonInfo] = useState<{
     votes: number;
@@ -940,6 +946,35 @@ export default function App() {
 
   const phaseLabel = phase === 0 ? "大厅" : phase === 1 ? "行棋中" : phase === 2 ? "已终局" : "—";
 
+  /**
+   * 每个座位的威胁状态（将军 / 将死 / 困毙）。
+   *
+   * 判定放在前端而非合约：实测链上 isInCheck 要 379k gas、hasAnyLegalMove 533k，
+   * 而一次走子才 ~150k —— 塞进热路径会让对局成本翻几倍。纯计算在这里是免费的，
+   * 合约侧仍保留同样的只读查询供任何人复核。
+   */
+  const threats = useMemo(() => {
+    const out = {} as Record<Seat, ThreatState>;
+    for (const s of [0, 1, 2] as Seat[]) {
+      try {
+        out[s] = threatState(board, s);
+      } catch {
+        out[s] = "none";
+      }
+    }
+    return out;
+  }, [board]);
+
+  const eliminatedMap = useMemo(() => {
+    const out = {} as Record<Seat, boolean>;
+    for (const s of [0, 1, 2] as Seat[]) out[s] = Boolean(seats[s]?.eliminated);
+    return out;
+  }, [seats]);
+
+  const seatedCount = seats.filter(
+    (s) => s.address && s.address !== "0x0000000000000000000000000000000000000000"
+  ).length;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -949,6 +984,13 @@ export default function App() {
             三国围棋桌上藏着押金 AI 卧底——步步一笔交易烧 MON。氪金可打华丽远程车；性价比党靠省油与逼破产取胜。非法着法永不放行。
           </p>
           <div className="badge-row">
+            <button
+              className="ghost"
+              style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem" }}
+              onClick={() => setHowToOpen(true)}
+            >
+              怎么玩？
+            </button>
             <span className="badge accent">赛道 04 · AI 身份与声誉</span>
             <span className="badge">ZK-ready · 非完整 ZK</span>
             <span className="badge">{chainName || activeChain.name} · chainId {addresses.chainId}</span>
@@ -1024,6 +1066,14 @@ export default function App() {
 
       <div className="layout">
         <div className="panel board-wrap">
+          <StatusBar
+            turn={turn}
+            phase={phase}
+            mySeat={activeSeat}
+            threats={threats}
+            eliminated={eliminatedMap}
+            seatedCount={seatedCount}
+          />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
             <h2 style={{ margin: 0 }}>棋盘 · 合法格才可点</h2>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1344,6 +1394,13 @@ export default function App() {
         onClose={() => setRevealOpen(false)}
       />
       <PlayerProfile address={profileAddress} onClose={() => setProfileAddress(null)} />
+      <HowToPlay
+        open={howToOpen}
+        onClose={() => {
+          setHowToOpen(false);
+          markHowToSeen();
+        }}
+      />
       <ToastHost items={toasts} />
     </div>
   );

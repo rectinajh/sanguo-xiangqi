@@ -333,6 +333,54 @@
   },
   {
     "type": "function",
+    "name": "commitAndRevealMove",
+    "inputs": [
+      {
+        "name": "gameId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fromX",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "fromY",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "toX",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "toY",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "piece",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "commitHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "commitMove",
     "inputs": [
       {

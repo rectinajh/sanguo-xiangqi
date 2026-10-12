@@ -152,8 +152,19 @@ async function main() {
         [m.seat, m.from.x, m.from.y, m.to.x, m.to.y, m.piece, salt]
       )
     );
-    await send(who[m.seat], gameAbi, table, "commitMove", [id, commit]);
-    await send(who[m.seat], gameAbi, table, "revealMove", [id, m.from.x, m.from.y, m.to.x, m.to.y, m.piece, salt]);
+    // 一步一签：commit + reveal 合并到一笔交易（合约的 commitAndRevealMove）。
+    // 旧的两笔路径仍然可用，但每步要多签一次名，没有换来任何隐私 ——
+    // revealMove 要求轮到本座，顺序走子下对手本来就看得到。
+    await send(who[m.seat], gameAbi, table, "commitAndRevealMove", [
+      id,
+      m.from.x,
+      m.from.y,
+      m.to.x,
+      m.to.y,
+      m.piece,
+      salt,
+      commit,
+    ]);
     if (m.tag === "betray" && betrayHash) {
       await send(humanA, covAbi, covenant, "challengeBetrayal", [betrayHash, 2, 1]);
     }
