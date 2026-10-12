@@ -278,7 +278,7 @@ export function drivesToBias(d: Drives, input: SensoryInput): Bias {
  *    token 放在 agent/.env 的 NEUPRINT_TOKEN。
  *
  * 为什么不直接下 Feather 全量：`connectome-weights` 是 1.0 GB，而全 CNS 是
- * 15 万神经元 / 5000 万突触 —— 必须裁剪成与攻击/决策相关的子网（约 1k–5k 神经元）
+ * 17.6 万神经元（实测 male-cns:v1.0 为 176,422） —— 必须裁剪成与攻击/决策相关的子网（约 1k–5k 神经元）
  * 才能实时跑。裁剪规则是本功能的核心设计决定，不是附带细节。
  *
  * 没有 token 时返回 null，调用方自动降级为原有脚本策略 —— 功能缺失不应
@@ -293,21 +293,34 @@ export async function loadConnectome(cfg: {
   const server = (cfg.server ?? "https://neuprint.janelia.org").replace(/\/$/, "");
   const dataset = cfg.dataset ?? "male-cns:v1.0";
   try {
-    const r = await fetch(`${server}/api/custom/customapi`, {
+    // ⚠️ 端点与字段名都踩过坑（实测）：
+    //   路径是 /api/custom/custom —— 不是 /api/custom/customapi
+    //   查询字段名是 cypher       —— 不是 query
+    //   两者写错的表现都是 404 {"message":"Not Found"}，而 404 也出现在
+    //   "路径根本不存在"时，所以很容易误判成"token 无效"。真正判据是：
+    //   带 Bearer 头打不存在的路径也是 404 —— 说明鉴权其实已通过。
+    //   权威来源：官方客户端 neuprint-python 的 client.py（fetch_custom / fetch_datasets）。
+    const r = await fetch(`${server}/api/custom/custom`, {
       method: "POST",
       headers: { "content-type": "application/json", Authorization: `Bearer ${cfg.token}` },
       body: JSON.stringify({
         dataset,
-        // 只取"攻击 / 决策"相关的细胞类型，避免把全 CNS 拉下来
-        query: `MATCH (n:Neuron)
-                WHERE n.type CONTAINS 'P1' OR n.type STARTS WITH 'DN'
-                RETURN n.bodyId AS id, n.type AS type, n.cellType AS cellType
-                LIMIT 3000`,
+        // 只取"攻击 / 决策"相关的细胞类型，避免把全 CNS（17.6 万神经元）拉下来
+        cypher: `MATCH (n:Neuron)
+                 WHERE n.type CONTAINS 'P1' OR n.type STARTS WITH 'DN'
+                 RETURN n.bodyId AS id, n.type AS type, n.instance AS instance
+                 LIMIT 3000`,
       }),
     });
     if (!r.ok) return null;
-    const data = (await r.json()) as { data?: Array<Record<string, unknown>> };
-    const rows = data.data ?? [];
+    // neuPrint 返回列式：{columns:["id","type","instance"], data:[[...],[...]]}
+    const body = (await r.json()) as { columns?: string[]; data?: unknown[][] };
+    const cols = body.columns ?? [];
+    const rows = (body.data ?? []).map((row) => {
+      const o: Record<string, unknown> = {};
+      cols.forEach((c, i) => (o[c] = row[i]));
+      return o;
+    });
     if (rows.length === 0) return null;
     // 说明：这里只取到神经元清单；突触权重需要第二次查询
     // （connectome-weights）。两者拼接与裁剪规则留待

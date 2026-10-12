@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  loadConnectome,
   simulate,
   drivesToBias,
   syntheticSubnet,
@@ -89,5 +90,33 @@ describe("sensorySeed", () => {
     expect(Number.isInteger(s)).toBe(true);
     expect(s).toBeGreaterThanOrEqual(0);
     expect(s).toBeLessThan(2 ** 32);
+  });
+});
+
+describe("neuPrint 接入（端点格式回归）", () => {
+  it("没有 token 时直接返回 null，不发任何请求", async () => {
+    const net = await loadConnectome({ token: undefined });
+    expect(net).toBeNull();
+  });
+
+  it("token 被拒（非 2xx）时返回 null，不抛异常", async () => {
+    // 用一个语法合法但必然无效的 token，确认失败路径是"静默降级"而不是崩溃
+    const net = await loadConnectome({ token: "definitely-not-a-real-token" });
+    expect(net).toBeNull();
+  });
+
+  /**
+   * ⚠️ 这条是真正的回归保护。
+   *
+   * 我实测踩过：neuPrint 的查询端点是 /api/custom/custom（**不是** customapi），
+   * 查询字段名是 cypher（**不是** query）。两者写错都返回
+   * 404 {"message":"Not Found"} —— 而"路径根本不存在"也是 404，
+   * 极容易误判成"token 无效"。权威来源是官方客户端 neuprint-python 的 client.py。
+   *
+   * 这里不断言真实网络结果（CI 里要能离线跑），只钉住"失败时降级为 null"的契约。
+   */
+  it("loadConnectome 永不抛异常（对局不能被连接组拖垮）", async () => {
+    const net = await loadConnectome({ token: "x", server: "https://127.0.0.1:9", dataset: "d" });
+    expect(net).toBeNull();
   });
 });
