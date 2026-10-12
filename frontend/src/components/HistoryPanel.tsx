@@ -74,8 +74,10 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
 
       {up === false && (
         <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 6 }}>
-          连不上索引器（{indexerUrl()}）。本地开发跑 <code>pnpm indexer</code>；
-          公网请配置 <code>VITE_INDEXER_URL</code>。
+          对局历史与排行榜来自链下索引服务，当前连不上（{indexerUrl()}）。
+          <br />
+          不影响玩游戏：建房、入座、走子、 Covenant 与背刺罚没全部照常工作，
+          只是看不到历史列表。
         </p>
       )}
 
