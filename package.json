@@ -15,11 +15,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && cd frontend && tsc -b --force && cd ../agent && tsc --noEmit && cd ../server && tsc --noEmit",
     "test:frontend": "pnpm --filter frontend test",
     "gen:sanren": "tsx scripts/gen-sanren-solidity.ts",
-    "test": "pnpm test:shared && pnpm --filter frontend test && pnpm test:forge && pnpm size",
+    "test": "pnpm test:shared && pnpm --filter frontend test && pnpm test:agent && pnpm test:forge && pnpm size",
     "indexer": "pnpm --filter server indexer",
     "indexer:once": "pnpm --filter server indexer:once",
     "size": "bash scripts/check-size.sh",
-    "postinstall": "pnpm build:shared"
+    "postinstall": "pnpm build:shared",
+    "test:agent": "pnpm --filter agent test"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {

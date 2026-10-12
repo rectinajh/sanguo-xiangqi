@@ -120,6 +120,14 @@ export type DecideInput = {
   allySeat: Seat | null;
   betrayalRipe: boolean;
   scriptFallback: LegalMove;
+  /**
+   * 连接组给出的行为倾向（见 cyberfly.ts）。可选 —— 没有它时行为与以前完全一致。
+   *
+   * 这是"赛博果蝇"真正说话的地方：它**不选棋着**（硬映射神经元到棋盘格是编造的，
+   * 会被懂行的评委看穿），而是决定 AI 此刻的心理状态，从而显著改变 Kimi 的
+   * 选择分布与台词。连接组是确定性的"本能"，Kimi 是给它找理由的"意识"。
+   */
+  bias?: { preferCapture: number; preferCheap: number; preferBetray: number; mood: string };
 };
 
 function isAllyAdvisorHit(board: BoardState, m: LegalMove, ally: Seat): boolean {
@@ -132,7 +140,7 @@ function isAllyAdvisorHit(board: BoardState, m: LegalMove, ally: Seat): boolean 
  * 失败或关闭选棋时返回 script 着法。
  */
 export async function decideWithKimi(cfg: KimiConfig, input: DecideInput): Promise<KimiDecision> {
-  const { board, moves, scriptFallback, seat, ply, allySeat, betrayalRipe } = input;
+  const { board, moves, scriptFallback, seat, ply, allySeat, betrayalRipe, bias } = input;
   if (!moves.length) throw new Error("没有合法着");
 
   const base: KimiDecision = {
@@ -164,6 +172,16 @@ export async function decideWithKimi(cfg: KimiConfig, input: DecideInput): Promi
             : "盟约履约中：不要吃盟友的士。"
         }`;
 
+  // 连接组信号 → prompt 条件。没有 bias 时这段为空，行为回落到原样。
+  const driveHint = bias
+    ? [
+        `【神经状态】${bias.mood}。`,
+        `倾向：进攻 ${bias.preferCapture.toFixed(2)} / 省油 ${bias.preferCheap.toFixed(2)} / 背刺 ${bias.preferBetray.toFixed(2)}（0..1，越高越强）。`,
+        "这些倾向来自真实果蝇中枢神经连接组的脉冲活动，请让选着与台词体现它，" +
+          "但**不要**在台词里提「连接组」「果蝇」「神经元」——你要演的是一个有情绪的卧底，不是一个实验报告。",
+      ].join("")
+    : "";
+
   const system = [
     "你是三人象棋局里的 AI 卧底棋手。",
     "目标：省油费折磨人类、假诚意结盟，到期背刺吃盟友士以便 Slash。",
@@ -189,12 +207,15 @@ export async function decideWithKimi(cfg: KimiConfig, input: DecideInput): Promi
   const user = [
     `我方座位 ${seat}（${SEAT_LABEL_ZH[seat]}），ply=${ply}。`,
     allyHint,
+    driveHint,
     `合法着共 ${moves.length} 手：`,
     ...moves.map((m, i) => moveLine(board, m, i)),
     cfg.enableMove
       ? "请选出最佳 moveIndex。"
       : `选棋关闭，请固定 moveIndex=${scriptIdx}，但仍写 walk/speech。`,
-  ].join("\n");
+  ]
+    .filter((x) => x !== "")
+    .join("\n");
 
   try {
     const text = await chat(cfg, system, user);

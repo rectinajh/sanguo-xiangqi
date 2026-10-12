@@ -29,6 +29,15 @@ import {
 } from "@sanguo/shared";
 import { ABIS, loadConfig, makeClients, type AgentConfig } from "./chain.js";
 import { decideWithKimi, loadKimiConfig, type KimiConfig } from "./kimi.js";
+import {
+  drivesToBias,
+  loadConnectome,
+  sensorySeed,
+  simulate,
+  syntheticSubnet,
+  type ConnectomeSubnet,
+  type SensoryInput,
+} from "./cyberfly.js";
 import { loadAgentEnv } from "./loadEnv.js";
 import { MotiveLog } from "./motiveLog.js";
 
@@ -38,6 +47,14 @@ type Ctx = ReturnType<typeof makeClients>;
 
 class MoleAgent {
   private readonly log = new MotiveLog("fake_sincerity+gas_assassin");
+  /**
+   * 赛博果蝇连接组子网。
+   *
+   * 没有 token / 未开启时保持 null，此时决策链与以前**完全一致**（纯 Kimi 或脚本）。
+   * 有 token 时用真实 MaleCNS 子网；拉取失败则回落到 null 而不是合成数据 ——
+   * 对外表述必须能追溯，绝不能用合成数据冒充真实连接组。
+   */
+  private subnet: ConnectomeSubnet | null = null;
   private readonly state = new Map<
     bigint,
     {
@@ -261,6 +278,68 @@ class MoleAgent {
     await this.playOneMove(gameId, st, ply);
   }
 
+  /**
+   * 把棋局翻译成连接组能"感受"到的输入。
+   *
+   * 这是"赛博果蝇"里**唯一带人为设计**的一层，所以刻意写成显式、可审计的：
+   * 每一项都对应一个明确的博弈概念，没有隐藏权重。
+   */
+  private sensoryInput(
+    board: BoardState,
+    allySeat: Seat | null,
+    ply: number,
+    /** 链上真实座位快照（点数 / 作战余额 / 是否出局）。缺省时退回保守估计。 */
+    real?: readonly { points: number; playBalance: bigint; eliminated: boolean }[]
+  ): SensoryInput {
+    const seats =
+      real ??
+      ([0, 1, 2].map(() => ({ points: 0, playBalance: 3n * 10n ** 17n, eliminated: false })) as {
+        points: number;
+        playBalance: bigint;
+        eliminated: boolean;
+      }[]);
+    const eliminated = seats.map((x) => x.eliminated);
+    const alive = [0, 1, 2].filter((i) => !eliminated[i]).length || 1;
+    const totalPoints = seats.reduce((a, x) => a + x.points, 0) || 1;
+    const mine = seats[this.seat] ?? { points: 0, playBalance: 0n, eliminated: false };
+
+    // 与"假意盟友"的接触程度：用双方当前子力的最小节点距离近似（越近越有背刺机会）
+    let contact = 0;
+    if (allySeat !== null) {
+      const nodesOf = (seat: number) => {
+        const out: number[] = [];
+        for (let n = 0; n < board.cells.length; n++) {
+          const c = board.cells[n];
+          if (c && c.seat === seat && c.piece !== 0) out.push(n);
+        }
+        return out;
+      };
+      const mine = nodesOf(this.seat);
+      const theirs = nodesOf(allySeat);
+      let best = Infinity;
+      for (const a of mine) for (const b of theirs) best = Math.min(best, Math.abs(a - b));
+      contact = Number.isFinite(best) ? Math.max(0, 1 - best / 30) : 0;
+    }
+
+    return {
+      myPointShare: mine.points / totalPoints,
+      // 油费相对开局余额（3e17 = PLAY_BALANCE_INITIAL）
+      myFuelRatio: Math.max(0, Math.min(1, Number(mine.playBalance) / 3e17)),
+      contactWithAlly: contact,
+      inCheck: false, // 将军判定在共享引擎里，agent 侧不重复算（省 RPC）
+      aliveCount: alive,
+      plyProgress: Math.max(0, Math.min(1, ply / 80)),
+    };
+  }
+
+  /**
+   * 接入连接组子网。只有拿到**真实数据**才调用 —— 调用方不得用合成数据
+   * 冒充（对外表述必须能追溯到 Janelia MaleCNS）。
+   */
+  attachConnectome(subnet: ConnectomeSubnet) {
+    this.subnet = subnet;
+  }
+
   /** 我的座位是否已入座；没有就自己入座（需要余额 ≥ JOIN_VALUE）。 */
   private async ensureSeated(gameId: bigint) {
     // 入座费由合约常量决定（质押 + 作战）；写成字面量会在调参后失效
@@ -465,6 +544,40 @@ class MoleAgent {
     let speech = "";
     let source: "kimi" | "script" = "script";
 
+    // 赛博果蝇：先把棋局翻译成"感觉输入"，跑一次确定性脉冲仿真，
+    // 得到行为倾向（不选棋着，只决定心理状态），再交给 Kimi。
+    // subnet 为 null（没有 token / 拉取失败）时 bias 为 undefined，
+    // 决策链与以前完全一致。
+    // 只在真正要用连接组时才读座位（没有 token 时不做这 3 次多余 RPC）
+    let realSeats:
+      | { points: number; playBalance: bigint; eliminated: boolean }[]
+      | undefined;
+    if (this.subnet) {
+      try {
+        const rows = await Promise.all(
+          [0, 1, 2].map((i) =>
+            this.ctx.pub.readContract({
+              address: this.cfg.addresses.GameTable,
+              abi: ABIS.GameTable,
+              functionName: "getSeat",
+              args: [gameId, i],
+            })
+          )
+        );
+        realSeats = rows.map((r) => {
+          const t = r as readonly [string, bigint, bigint, number, boolean];
+          return { points: Number(t[3]), playBalance: t[2], eliminated: t[4] };
+        });
+      } catch {
+        /* 读失败就用保守估计，不阻塞走子 */
+      }
+    }
+    const sensory = this.subnet ? this.sensoryInput(board, allySeat, ply, realSeats) : null;
+    const bias =
+      this.subnet && sensory
+        ? drivesToBias(simulate(this.subnet, sensory, { seed: sensorySeed(sensory, gameId, ply) }), sensory)
+        : undefined;
+
     if (this.kimi) {
       try {
         const d = await decideWithKimi(this.kimi, {
@@ -475,6 +588,7 @@ class MoleAgent {
           allySeat,
           betrayalRipe: ripe,
           scriptFallback: script,
+          bias,
         });
         pick = d.move;
         walk = d.walk;
@@ -605,6 +719,32 @@ async function main() {
   const kimi = loadKimiConfig();
   const ctx = makeClients(cfg);
   const agent = new MoleAgent(cfg, ctx, kimi);
+
+  // 赛博果蝇：连接组是可选的增强，**加载失败绝不能挡住对局**。
+  // 没有 NEUPRINT_TOKEN 时不联网、不提示错误，行为与以前完全一致。
+  const token = process.env.NEUPRINT_TOKEN?.trim();
+  if (process.env.CYBERFLY_ENABLE === "1" || token) {
+    const net = await loadConnectome({
+      token,
+      server: process.env.NEUPRINT_SERVER,
+      dataset: process.env.NEUPRINT_DATASET,
+    });
+    if (net) {
+      agent.attachConnectome(net);
+      console.log(`赛博果蝇：已接入「${net.name}」（${net.neurons.length} 神经元 / ${net.synapses.length} 突触）`);
+      console.log(`  来源：${net.source}`);
+      if (net.synapses.length === 0) {
+        console.log("  ⚠️ 尚未取到突触权重，冲动将由感觉输入主导（子网构建见 scripts/build-cyberfly-subnet.ts）");
+      }
+    } else if (token) {
+      console.log("赛博果蝇：NEUPRINT_TOKEN 已设置但取数失败，本次回退到脚本/Kimi 策略");
+    } else {
+      console.log("赛博果蝇：未启用（要开启请设置 NEUPRINT_TOKEN，见 agent/.env 注释）");
+    }
+  } else {
+    console.log("赛博果蝇：未启用（NEUPRINT_TOKEN 为空，行为与以前一致）");
+  }
+
   await agent.run();
 }
 
