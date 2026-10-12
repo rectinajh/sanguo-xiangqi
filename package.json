@@ -19,7 +19,7 @@
     "test": "pnpm test:shared && pnpm --filter frontend test && pnpm test:forge && pnpm size",
     "indexer": "pnpm --filter server indexer",
     "indexer:once": "pnpm --filter server indexer:once",
-    "size": "cd contracts && forge build --sizes"
+    "size": "bash scripts/check-size.sh"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {
@@ -31,6 +31,13 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "tinypool": ">=2.1.2",
+      "esbuild": "^0.25.12"
+    }
+  },
+  "engines": {
+    "node": ">=22.5.0"
   }
 }

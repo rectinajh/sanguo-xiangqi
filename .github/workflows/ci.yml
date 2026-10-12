@@ -50,6 +50,16 @@ jobs:
       - name: Contract tests
         run: pnpm test:forge
 
+      # 合约尺寸门禁。
+      #
+      # 为什么必须有这一步：foundry 的 code_size_limit 曾经被设成 500_000，
+      # 于是 GameTable 涨到 146 KB（EIP-170 上限是 24,576 B）时 forge test
+      # 依然全绿，直到真正去 anvil 部署才炸。默认 profile 现在恢复成真实上限，
+      # 这里再显式检查一次，防止有人为了图方便又把它调大。
+      # 注意：`forge test` 跑的是 [profile.test]（尺寸放宽），别用它的结果判断。
+      - name: Contract size gate (EIP-170)
+        run: pnpm size
+
       # 依赖告警不阻塞构建，但必须可见
       - name: Dependency audit (informational)
         run: pnpm audit --audit-level high || true
