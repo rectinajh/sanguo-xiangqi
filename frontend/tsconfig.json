@@ -16,8 +16,8 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
     "paths": {
+      "*": ["./*"],
       "@sanguo/shared": ["../packages/shared/src/index.ts"]
     }
   },

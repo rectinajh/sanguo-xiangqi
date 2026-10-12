@@ -479,6 +479,20 @@ export async function directorDrain(account: Signer, gameId: bigint, seat: numbe
   await pub.waitForTransactionReceipt({ hash });
 }
 
+export async function directorRelocate(account: Signer, gameId: bigint, fromNode: number, toNode: number) {
+  const wallet = getSignerWalletClient();
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "directorRelocate",
+    args: [gameId, fromNode, toNode],
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+}
+
 export async function finalizeGame(account: Signer, gameId: bigint, motiveHash: Hex) {
   const wallet = getSignerWalletClient();
   const pub = getPublicClient();
