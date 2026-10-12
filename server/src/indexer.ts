@@ -629,8 +629,12 @@ async function main() {
       send(res, 500, { error: (e as Error).message.split("\n")[0] });
     });
   });
-  server.listen(cfg.port, () => {
-    console.log(`  监听      http://0.0.0.0:${cfg.port}`);
+  // 默认只绑回环：索引器是"给同一个部署里的前端/代理用"的服务，
+  // 本身没有任何鉴权。绑 0.0.0.0 会让同机其它进程、内网任意主机都能读它
+  // （实测服务器上它确实监听在 *:8790，只靠 ufw 挡着）。
+  // 需要对外暴露时用 INDEXER_HOST 显式指定，让"要不要公开"成为一个自觉决定。
+  server.listen(cfg.port, process.env.INDEXER_HOST ?? "127.0.0.1", () => {
+    console.log(`  监听      http://${process.env.INDEXER_HOST ?? "127.0.0.1"}:${cfg.port}`);
     console.log(
       `  接口      GET /health · /games · /games/:id · /players/:address · /leaderboard · /agents`
     );
