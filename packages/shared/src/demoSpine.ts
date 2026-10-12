@@ -60,7 +60,8 @@ export function demoSpine(): { moves: DemoMove[]; cheapFee: bigint; chariotFee: 
   const expensive = {
     seat: 0 as Seat,
     from: { x: campNode(SANREN_MAP, 0, 8, 0), y: 0 },
-    to: { x: 71, y: 0 },
+    // 沿本营边车进两格（r0→r2）；勿写死 nodeId，地图节点数一变就会挂
+    to: { x: campNode(SANREN_MAP, 0, 8, 2), y: 0 },
     piece: Piece.Chariot,
     tag: "expensive" as const,
   };
