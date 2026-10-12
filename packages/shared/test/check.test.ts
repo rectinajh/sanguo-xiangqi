@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { emptyBoard, initialBoard, legalMoves, isLegalMove, applyMove } from "../src/board.js";
+import { emptyBoard, initialBoard, legalMoves } from "../src/board.js";
 import { isInCheck, hasAnyLegalMove, threatState, findGeneral, isLoss } from "../src/check.js";
 import { Piece } from "../src/pieces.js";
 import type { Seat } from "../src/pieces.js";
+import { campNode } from "../src/sanrenSetup.js";
+import { SANREN_MAP } from "../src/sanrenMap.js";
 
 const put = (b: ReturnType<typeof emptyBoard>, node: number, piece: Piece, seat: Seat) => {
   b.cells[node] = { piece, seat };
@@ -88,60 +90,34 @@ describe("hasAnyLegalMove / threatState", () => {
   });
 });
 
-/**
- * 正向用例：从初始局面真实推演出一个"将军"局面。
- * 走法序列由一次脚本搜索得到（找第一个能把对手将军的着法），这里硬编码下来
- * 作为回归基准 —— 否则本文件全是"不将军"的否定断言，等于没验证过检出能力。
- */
-const CHECK_SEQ: Array<[Seat, number, number]> = [
-  [0, 70, 76], [1, 29, 36], [2, 35, 26], [0, 72, 78], [1, 31, 38],
-  [2, 26, 17], [0, 74, 80], [1, 33, 40], [2, 17, 8], [0, 78, 127],
-  [1, 38, 121], [2, 8, 7], [0, 127, 78], [1, 121, 38], [2, 7, 6],
-  [0, 78, 127], [1, 38, 121],
-];
-
-function replayCheckSeq() {
-  let b = initialBoard();
-  for (const [seat, from, to] of CHECK_SEQ) {
-    const ok = isLegalMove(b, seat, { x: from, y: 0 }, { x: to, y: 0 });
-    expect(ok, `序列中 ${seat}: ${from}->${to} 应当合法`).toBe(true);
-    b = applyMove(b, seat, { x: from, y: 0 }, { x: to, y: 0 }).board;
-  }
-  return b;
+/** 正向用例：敌车照帅（构造局面，避免依赖易碎的长推演序列）。 */
+function chariotChecksGeneralBoard() {
+  const b = emptyBoard();
+  const general = campNode(SANREN_MAP, 0, 4, 0);
+  const chariot = campNode(SANREN_MAP, 0, 0, 0); // 同营底线，对黑方来说是敌方车位
+  put(b, general, Piece.General, 0);
+  put(b, chariot, Piece.Chariot, 1);
+  expect(isInCheck(b, 0), "敌车应将军红帅").toBe(true);
+  return { b, general, chariot };
 }
 
-describe("正向用例：真实推演出的将军局面", () => {
-  it("推演到第 18 手时，seat 2 可以将军 seat 1", () => {
-    const b = replayCheckSeq();
-    // 此时轮到 seat 2
-    expect(b.turn).toBe(2);
-
-    // 6 -> 5 是那个将军着法
-    const moves = legalMoves(b, 2);
-    const mating = moves.find((m) => m.from.x === 6 && m.to.x === 5);
-    expect(mating, "6->5 应当在合法着法里").toBeTruthy();
-
-    // 走之前 seat1 不被将军
-    expect(isInCheck(b, 1)).toBe(false);
-
-    // 走之后 seat1 被将军 —— 这是本文件的**正向**证据
-    const after = applyMove(b, 2, { x: 6, y: 0 }, { x: 5, y: 0 }).board;
-    expect(isInCheck(after, 1)).toBe(true);
-    expect(threatState(after, 1)).not.toBe("none");
+describe("正向用例：敌车照帅", () => {
+  it("同线敌车直击 → 检出将军", () => {
+    const { b } = chariotChecksGeneralBoard();
+    expect(threatState(b, 0)).not.toBe("none");
   });
 
-  it("被将军的一方仍有解法时不是将死", () => {
-    const after = applyMove(replayCheckSeq(), 2, { x: 6, y: 0 }, { x: 5, y: 0 }).board;
-    if (isInCheck(after, 1)) {
-      const t = threatState(after, 1);
-      // 要么有解法（check），要么真的将死了（checkmate）；两者都合法，
-      // 但如果是 checkmate 必须确实无着法
-      if (t === "check") {
-        expect(hasAnyLegalMove(after, 1)).toBe(true);
-      } else {
-        expect(t).toBe("checkmate");
-        expect(hasAnyLegalMove(after, 1)).toBe(false);
-      }
+  it("被将军方若仍有合法着法则是 check 而非无解", () => {
+    const { b } = chariotChecksGeneralBoard();
+    // 士放在不挡车线的位置（f5），避免误挡照将
+    put(b, campNode(SANREN_MAP, 0, 5, 0), Piece.Advisor, 0);
+    expect(isInCheck(b, 0)).toBe(true);
+    const t = threatState(b, 0);
+    if (t === "check") {
+      expect(hasAnyLegalMove(b, 0)).toBe(true);
+    } else {
+      expect(t).toBe("checkmate");
+      expect(hasAnyLegalMove(b, 0)).toBe(false);
     }
   });
 });

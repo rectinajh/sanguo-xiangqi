@@ -104,7 +104,12 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
   const cz = (name: string) => byKey.get(`z:${name}`)!;
 
   const localPoint = (f: number, r: number): [number, number] => {
-    if (r === 3 && (f === 0 || f === 8)) return [f === 0 ? pCorner[0] : -pCorner[0], pCorner[1]];
+    // 卒线外角：各营独立落点（略向营内收），避免与邻营共点，以便五兵隔位摆 0/2/4/6/8
+    if (r === 3 && (f === 0 || f === 8)) {
+      const baseX = f === 0 ? pCorner[0] : -pCorner[0];
+      const pull = f === 0 ? 0.28 : -0.28;
+      return [baseX + pull, pCorner[1]];
+    }
     const x = f - 4;
     return [x, arcY(x, r)];
   };
@@ -172,9 +177,24 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
     for (let i = 0; i < 6; i++) seg(r3[i], r3[i + 1], arcAbout(c, radius(3)));
     seg(cn(c, 0, 3), r3[0]);
     seg(r3[6], cn(c, 8, 3));
+    // 邻营卒线外角已拆点：用短边桥接，保持外环可走
+    seg(cn(p, 8, 3), cn(c, 0, 3));
+    seg(cn(c, 8, 3), cn(nx, 0, 3));
     lines.push({
       name: `${c}:r3`,
-      nodes: [cn(p, 8, 0), cn(p, 8, 1), cn(p, 8, 2), cn(c, 0, 3), ...r3, cn(c, 8, 3), cn(nx, 0, 2), cn(nx, 0, 1), cn(nx, 0, 0)],
+      nodes: [
+        cn(p, 8, 0),
+        cn(p, 8, 1),
+        cn(p, 8, 2),
+        cn(p, 8, 3),
+        cn(c, 0, 3),
+        ...r3,
+        cn(c, 8, 3),
+        cn(nx, 0, 3),
+        cn(nx, 0, 2),
+        cn(nx, 0, 1),
+        cn(nx, 0, 0),
+      ],
     });
 
     for (let f = 0; f <= 8; f++) {

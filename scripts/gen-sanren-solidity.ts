@@ -36,26 +36,8 @@ const out = path.join(root, "contracts/src/libraries/SanrenData.sol");
 const N = SANREN_MAP.nodes.length;
 const adj = SANREN_GRAPH.adj;
 const lines = SANREN_MAP.lines.filter((l) => l.nodes.length >= 2);
-// ⚠️ 演示用的布局微调：把绿马（seat 2）从 82 挪到 63。
-// 63 是能一步吃到红方士（节点 44）的位置，3 分钟剧本的"背刺吃士 → Slash"依赖它。
-// 这个改动必须落在数据源头：以前合约侧在 _setupInitialBoard 里手写挪子、
-// 而 packages/shared 的 initialBoard() 也各自挪一次，两边一旦不同步就出现
-// "TS 引擎说这手合法、合约说非法"的分裂（实测踩过）。
-// 统一在这里改，两边都由同一份数据派生。
-const HORSE_FROM = 82;
-const HORSE_TO = 63;
-const setup = initialSanrenPieces().map((p) =>
-  p.node === HORSE_FROM && p.seat === 2 ? { ...p, node: HORSE_TO } : p
-);
-{
-  const moved = setup.filter((p) => p.node === HORSE_TO && p.seat === 2);
-  if (moved.length !== 1 || moved[0].piece !== 4) {
-    throw new Error("绿马挪位失败：期望节点 63 上恰好有一匹绿马");
-  }
-  if (setup.some((p) => p.node === HORSE_FROM && p.seat === 2)) {
-    throw new Error("绿马挪位失败：82 上仍有绿马");
-  }
-}
+// 正式开局用标准摆法（马归位、兵隔位）。Demo 背刺短剧本只在 packages/shared demoInitialBoard 里挪马。
+const setup = initialSanrenPieces();
 const faces = SANREN_GRAPH.faces;
 
 const MAX_LINE = Math.max(...lines.map((l) => l.nodes.length));

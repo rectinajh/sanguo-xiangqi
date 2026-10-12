@@ -22,18 +22,21 @@ export function campNode(map: SanrenMap, camp: number, f: number, r: number): nu
   return n.id;
 }
 
+/** 标准象棋隔位：卒线 f0/2/4/6/8（地图已拆开三营外角，不再共点叠子）。 */
+const SOLDIER_FILES = [0, 2, 4, 6, 8];
+
 export function initialSanrenPieces(map: SanrenMap = SANREN_MAP): MapPiece[] {
   const out: MapPiece[] = [];
   for (const seat of [0, 1, 2]) {
     BACK.forEach((piece, f) => out.push({ node: campNode(map, seat, f, 0), seat, piece }));
     for (const f of [1, 7]) out.push({ node: campNode(map, seat, f, 2), seat, piece: Piece.Cannon });
-    for (const f of [1, 2, 4, 6, 7]) out.push({ node: campNode(map, seat, f, 3), seat, piece: Piece.Soldier });
+    for (const f of SOLDIER_FILES) out.push({ node: campNode(map, seat, f, 3), seat, piece: Piece.Soldier });
   }
   return out;
 }
 
 const GENERAL_ZH = ["帅", "将", "王"];
-const SOLDIER_ZH = ["兵", "卒", "丁"];
+const SOLDIER_ZH = ["魏", "蜀", "吴"];
 const OTHER_ZH: Partial<Record<Piece, string>> = {
   [Piece.Advisor]: "士",
   [Piece.Elephant]: "象",

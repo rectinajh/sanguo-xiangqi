@@ -35,9 +35,9 @@ contract GameTable {
     uint256 public constant MAX_PLIES = 80;
     uint256 public constant DEFEAT_STAKE_SHARE_BPS = 4000;
     uint256 public constant POINT_TO_MON_RATE = 0.001 ether;
-    uint8 public constant NODE_COUNT = 139;
+    uint8 public constant NODE_COUNT = 142;
     /// Legacy names: BOARD_W == NODE_COUNT, BOARD_H == 1 (node board)
-    uint8 public constant BOARD_W = 139;
+    uint8 public constant BOARD_W = 142;
     uint8 public constant BOARD_H = 1;
 
     enum Phase {
@@ -180,6 +180,14 @@ contract GameTable {
         require(g.phase == Phase.Lobby, "lobby");
         require(seat < 3, "seat");
         require(g.seats[seat].player == address(0), "taken");
+        // 同一个地址不能占多个座位。
+        // 否则一个人可以自己坐满三席、自己跟自己下（刷战绩、刷 AgentRegistry 声誉、
+        // 也能用两个座位互相"背刺"来套诚意金）。三人博弈的前提是三方独立。
+        // 顺带修掉一个隐患：`_seatOf` 只返回第一个匹配座位，占多座时
+        // abandonGame 会算错该退给谁。
+        for (uint8 i = 0; i < 3; i++) {
+            require(g.seats[i].player != msg.sender, "one seat per address");
+        }
         require(msg.value >= SEAT_STAKE + PLAY_BALANCE_INITIAL, "value");
         g.seats[seat].player = msg.sender;
         g.seats[seat].seatStake = SEAT_STAKE;

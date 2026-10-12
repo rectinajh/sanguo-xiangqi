@@ -45,7 +45,15 @@ import {
   assertCorrectChain,
   getInjectedWalletClient,
 } from "./lib/chain";
-import { copyText, describeRoom, inviteLinkFor, parseRoomFromUrl, setRoomInUrl } from "./lib/room";
+import {
+  copyText,
+  describeRoom,
+  inviteLinkFor,
+  isWatchUrl,
+  parseRoomFromUrl,
+  setRoomInUrl,
+  spectateLinkFor,
+} from "./lib/room";
 import { FAUCET_URL, faucetLabel } from "./lib/faucet";
 import {
   hasAddresses,
@@ -173,11 +181,15 @@ export default function App() {
   // ── 房间 / 邀请 / 水龙头 ─────────────────────────────────────
   /** 当前要进入的房间号（= 链上 gameId） */
   const [roomId, setRoomId] = useState<bigint | null>(null);
+  /** 观战链接的复制反馈 */
+  const [watchCopied, setWatchCopied] = useState(false);
   /** 开房后生成的邀请链接 */
   const [inviteLink, setInviteLink] = useState<string>("");
   const [inviteCopied, setInviteCopied] = useState(false);
   /** 水龙头状态（服务端是否可达 + 剩余可发次数） */
   const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 当前 URL 是否观战链接（只影响提示文案，不影响任何权限） */
+  const [watchMode, setWatchMode] = useState(() => isWatchUrl());
   /** 当前行棋方是否有卡住的 commit（用来决定要不要显示"清掉"按钮） */
   const [stuck, setStuck] = useState<{ pending: boolean; remaining: number } | null>(null);
   /** 新手指引：首次访问自动弹一次 */
@@ -529,6 +541,33 @@ export default function App() {
       toast("清理失败", friendlyError(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * 切到另一个房间（来自"找房间"列表或对局历史）。
+   * 只改 URL 与 roomId，随后常规的轮询会把那一局的状态拉回来。
+   */
+  function onPickGame(id: number) {
+    const gid = BigInt(id);
+    setRoomId(gid);
+    setRoomInUrl(gid);
+    setSelected(null);
+    // 立刻拉一次，不用等下一轮轮询
+    void refreshRef.current?.(gid, true);
+    toast(`已切到房间 #${id}`, "看座位空着就可以入座");
+  }
+
+  /** 复制观战链接：让朋友来看，而不是来抢座。 */
+  async function copySpectate() {
+    if (roomId === null) return;
+    const ok = await copyText(spectateLinkFor(roomId));
+    setWatchCopied(ok);
+    if (ok) {
+      toast("观战链接已复制", "对方打开即可只读围观，不占座位");
+      setTimeout(() => setWatchCopied(false), 2500);
+    } else {
+      toast("复制失败", "请手动选中链接复制");
     }
   }
 
@@ -1098,6 +1137,39 @@ export default function App() {
 
       <div className="layout">
         <div className="panel board-wrap">
+          {watchMode && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                padding: "8px 10px",
+                marginBottom: 8,
+                borderRadius: 10,
+                border: "1px solid var(--gold)",
+                background: "color-mix(in srgb, var(--gold) 10%, transparent)",
+                fontSize: "0.82rem",
+              }}
+            >
+              <span>
+                👁 观战模式 —— 你正在围观这一局。盘面是链上真实状态，实时更新；
+                想下场就关掉这个提示并入座。
+              </span>
+              <button
+                className="ghost"
+                style={{ marginLeft: "auto", padding: "0.3rem 0.7rem", fontSize: "0.78rem" }}
+                onClick={() => {
+                  setWatchMode(false);
+                  const url = new URL(window.location.href);
+                  url.hash = `#/r/${roomId ?? ""}`;
+                  window.history.replaceState(null, "", url.toString());
+                }}
+              >
+                退出观战
+              </button>
+            </div>
+          )}
           <StatusBar
             turn={turn}
             phase={phase}
@@ -1185,7 +1257,11 @@ export default function App() {
             onOpenPlayer={setProfileAddress}
           />
 
-          <HistoryPanel refreshKey={historyRefresh} onOpenPlayer={setProfileAddress} />
+          <HistoryPanel
+            refreshKey={historyRefresh}
+            onOpenPlayer={setProfileAddress}
+            onPickGame={onPickGame}
+          />
 
           {!isLocalDemo && (
             <div className="panel">
@@ -1287,9 +1363,22 @@ export default function App() {
                               color: "var(--text)",
                             }}
                           />
-                          <button className="primary" disabled={busy} onClick={copyInvite}>
-                            {inviteCopied ? "已复制 ✓" : "复制邀请链接"}
-                          </button>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button className="primary" disabled={busy} onClick={copyInvite}>
+                              {inviteCopied ? "已复制 ✓" : "复制邀请链接"}
+                            </button>
+                            <button
+                              className="secondary"
+                              disabled={busy}
+                              onClick={copySpectate}
+                              title="对方打开后只读围观，不占座位"
+                            >
+                              {watchCopied ? "已复制 ✓" : "复制观战链接"}
+                            </button>
+                          </div>
+                          <p style={{ fontSize: "0.72rem", color: "var(--muted)", margin: "6px 0 0" }}>
+                            邀请链接让对方入座；观战链接只让他看，不占座位。
+                          </p>
                         </>
                       )}
 

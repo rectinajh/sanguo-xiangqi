@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { computeMoveFee } from "../src/fees";
+import { computeMoveFeeBySteps } from "../src/fees";
 import { Piece } from "../src/pieces";
 
-describe("computeMoveFee (PRD 口播三例)", () => {
-  it("卒走1格 = 0.009 MON", () => {
-    expect(computeMoveFee(Piece.Soldier, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(9n * 10n ** 15n);
+describe("computeMoveFeeBySteps (SANREN_RULES §4)", () => {
+  it("卒 1 步 = 0.009 MON", () => {
+    expect(computeMoveFeeBySteps(Piece.Soldier, 1)).toBe(9n * 10n ** 15n);
   });
-  it("车走5格 = 0.070 MON", () => {
-    expect(computeMoveFee(Piece.Chariot, { x: 0, y: 0 }, { x: 5, y: 0 })).toBe(70n * 10n ** 15n);
+  it("车 5 步 = 0.070 MON", () => {
+    expect(computeMoveFeeBySteps(Piece.Chariot, 5)).toBe(70n * 10n ** 15n);
   });
-  it("马 distance=2 = 0.030 MON", () => {
-    expect(computeMoveFee(Piece.Horse, { x: 0, y: 0 }, { x: 2, y: 1 })).toBe(30n * 10n ** 15n);
+  it("马按 2 步 = 0.030 MON", () => {
+    expect(computeMoveFeeBySteps(Piece.Horse, 2)).toBe(30n * 10n ** 15n);
   });
 });

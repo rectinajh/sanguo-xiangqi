@@ -112,6 +112,35 @@ button.danger {
   .layout { grid-template-columns: 1fr; }
 }
 
+/* ── 手机适配 ──────────────────────────────────────────────
+   黑客松演示经常是"评委掏出手机点开链接"，而原来只有一个 980px 断点：
+   布局会变成单列，但字号与内边距仍是桌面尺寸，手机上会挤成一团。
+   这里只做低风险的调整（缩放字号与间距、让按钮可点区域够大），
+   不动任何布局逻辑。 */
+@media (max-width: 720px) {
+  .app { padding: 0.6rem; }
+  .topbar { padding: 0.7rem 0.8rem; }
+  .topbar h1 { font-size: 1.1rem; }
+  .tagline { font-size: 0.78rem; }
+  .panel { padding: 0.7rem; }
+  .panel h2 { font-size: 0.85rem; }
+  /* 按钮在手机上要够大才点得准（Apple HIG 建议 ≥44px） */
+  button { min-height: 40px; padding: 0.5rem 0.85rem; font-size: 0.85rem; }
+  .badge-row { gap: 0.35rem; }
+  .badge { font-size: 0.68rem; padding: 0.15rem 0.45rem; }
+  /* 棋盘铺满宽度，svg 自己会按 viewBox 缩放 */
+  .board-wrap { padding: 0.5rem; }
+  .metrics { grid-template-columns: auto 1fr; }
+  .modal { margin: 0.6rem; padding: 0.9rem; max-height: 92vh; overflow-y: auto; }
+}
+
+/* 极窄屏（iPhone SE 一类）：进一步收紧，避免横向滚动 */
+@media (max-width: 380px) {
+  .app { padding: 0.4rem; }
+  .panel { padding: 0.55rem; }
+  button { font-size: 0.8rem; padding: 0.45rem 0.7rem; }
+}
+
 .panel {
   background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%), var(--panel);
   border: 1px solid var(--border);

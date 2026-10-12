@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { inviteLinkFor, parseRoomFromUrl, ROOM_HASH_PREFIX } from "../src/lib/room";
+import {
+  inviteLinkFor,
+  spectateLinkFor,
+  isWatchUrl,
+  parseRoomFromUrl,
+  ROOM_HASH_PREFIX,
+} from "../src/lib/room";
 
 /**
  * 这些测试是有来历的：inviteLinkFor 曾经拼出缺少 "#" 的链接
@@ -48,5 +54,29 @@ describe("邀请链接", () => {
     expect(parseRoomFromUrl("http://x/#/r/abc")).toBeNull();
     expect(parseRoomFromUrl("http://x/#/r/0")).toBeNull();
     expect(parseRoomFromUrl("http://x/#/r/99999999999999999999999999")).toBeNull();
+  });
+});
+
+describe("观战链接", () => {
+  it("spectateLinkFor 带上 /watch 后缀", () => {
+    expect(spectateLinkFor(7n, "https://x.app/")).toBe("https://x.app/#/r/7/watch");
+  });
+
+  it("邀请链接不带后缀，两者可区分", () => {
+    const invite = inviteLinkFor(7n, "https://x.app/");
+    const watch = spectateLinkFor(7n, "https://x.app/");
+    expect(invite).toBe("https://x.app/#/r/7");
+    expect(watch).not.toBe(invite);
+  });
+
+  it("观战链接仍能解析出房间号（否则点开进不去房）", () => {
+    expect(parseRoomFromUrl("https://x.app/#/r/7/watch")).toBe(7n);
+    expect(parseRoomFromUrl("https://x.app/#/r/7")).toBe(7n);
+  });
+
+  it("isWatchUrl 只对带 /watch 的链接为真", () => {
+    expect(isWatchUrl("https://x.app/#/r/7/watch")).toBe(true);
+    expect(isWatchUrl("https://x.app/#/r/7")).toBe(false);
+    expect(isWatchUrl("https://x.app/")).toBe(false);
   });
 });

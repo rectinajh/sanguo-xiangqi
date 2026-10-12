@@ -112,7 +112,7 @@ contract StuckCommitTest is Test {
         bytes32 salt = keccak256("s");
         bytes32 ch = keccak256(abi.encode(uint8(0), uint8(72), uint8(0), uint8(78), uint8(0), uint8(7), salt));
         vm.prank(a);
-        game.commitAndRevealMove(id, 72, 0, 78, 0, 7, salt, ch);
+        game.commitAndRevealMove(id, 72, 0, 79, 0, 7, salt, ch);
         (bool pending,,) = game.pendingCommitOf(id);
         assertFalse(pending, "no pending after a normal move");
     }

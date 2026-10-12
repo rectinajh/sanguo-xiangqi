@@ -1,19 +1,25 @@
 import { BASE_FEE, DIST_UNIT, CAPTURE_PENALTY_PER_POINT } from "./constants.js";
 import { Piece, PIECE_MULT_BPS, PIECE_POINTS } from "./pieces.js";
 
+/** Coord.x = nodeId；y 保留为 0（兼容旧 ABI 的 fromY/toY） */
 export type Coord = { x: number; y: number };
 
 export function chebyshev(from: Coord, to: Coord): number {
   return Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
 }
 
-/** moveFee = (baseFee + distance * distUnit) * pieceMult */
-export function computeMoveFee(piece: Piece, from: Coord, to: Coord): bigint {
+export function computeMoveFeeBySteps(piece: Piece, steps: number): bigint {
   if (piece === Piece.Empty) return 0n;
-  const dist = BigInt(chebyshev(from, to));
+  const dist = BigInt(Math.max(1, steps));
   const raw = BASE_FEE + dist * DIST_UNIT;
   const bps = BigInt(PIECE_MULT_BPS[piece]);
   return (raw * bps) / 1000n;
+}
+
+/** @deprecated 用步数计费；保留给未改完的调用方 */
+export function computeMoveFee(piece: Piece, from: Coord, to: Coord): bigint {
+  const steps = Math.max(1, Math.abs(to.x - from.x) + Math.abs(to.y - from.y));
+  return computeMoveFeeBySteps(piece, steps);
 }
 
 export function capturePenalty(piece: Piece): bigint {

@@ -61,7 +61,7 @@ contract SingleTxTest is Test {
 
         (,, uint256 playBefore,,) = game.getSeat(id, 0);
         vm.prank(a);
-        game.commitAndRevealMove(id, 72, 0, 78, 0, piece, salt, ch);
+        game.commitAndRevealMove(id, 72, 0, 79, 0, piece, salt, ch);
 
         (,, uint256 playAfter,,) = game.getSeat(id, 0);
         assertLt(playAfter, playBefore, "move fee charged");
@@ -79,7 +79,7 @@ contract SingleTxTest is Test {
 
         vm.prank(a);
         vm.expectRevert(bytes("commit mismatch"));
-        game.commitAndRevealMove(id, 72, 0, 78, 0, 7, salt, wrong);
+        game.commitAndRevealMove(id, 72, 0, 79, 0, 7, salt, wrong);
     }
 
     /// 不是你的回合不能走（沿用 revealMove 的 turn 校验）。
@@ -90,7 +90,7 @@ contract SingleTxTest is Test {
 
         vm.prank(b);
         vm.expectRevert(bytes("turn"));
-        game.commitAndRevealMove(id, 31, 0, 38, 0, 7, salt, ch);
+        game.commitAndRevealMove(id, 29, 0, 36, 0, 7, salt, ch);
     }
 
     /// 走完一步之后不能再用同一个承诺重放（commit 已被 reveal 清掉，且回合已换人）。
@@ -100,11 +100,11 @@ contract SingleTxTest is Test {
         bytes32 ch = _hash(0, 72, 78, 7, salt);
 
         vm.prank(a);
-        game.commitAndRevealMove(id, 72, 0, 78, 0, 7, salt, ch);
+        game.commitAndRevealMove(id, 72, 0, 79, 0, 7, salt, ch);
 
         vm.prank(a);
         vm.expectRevert(bytes("turn"));
-        game.commitAndRevealMove(id, 72, 0, 78, 0, 7, salt, ch);
+        game.commitAndRevealMove(id, 72, 0, 79, 0, 7, salt, ch);
     }
 
     /// 非法走法（几何不成立）应被拒，且不扣费到无法解释的程度。

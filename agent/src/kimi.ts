@@ -55,7 +55,7 @@ export function loadKimiConfig(env: NodeJS.ProcessEnv = process.env): KimiConfig
 }
 
 function pieceAt(board: BoardState, m: LegalMove): Piece {
-  return board.cells[m.from.y][m.from.x].piece;
+  return board.cells[m.from.x].piece;
 }
 
 function moveLine(board: BoardState, m: LegalMove, i: number): string {
@@ -124,7 +124,7 @@ export type DecideInput = {
 
 function isAllyAdvisorHit(board: BoardState, m: LegalMove, ally: Seat): boolean {
   if (m.capture !== Piece.Advisor) return false;
-  return board.cells[m.to.y][m.to.x].seat === ally;
+  return board.cells[m.to.x].seat === ally;
 }
 
 /**

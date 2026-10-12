@@ -5,6 +5,8 @@
 *.log
 *.tsbuildinfo
 **/.env
+**/.env.testnet
+**/.env.local
 agent/.env
 contracts/broadcast/
 contracts/cache/
@@ -16,3 +18,4 @@ packages/shared/dist/
 
 # pnpm 的内容寻址缓存：属于本地缓存，不该入库（曾误入库 160 MB / 15k 文件）
 .pnpm-store/
+.vercel

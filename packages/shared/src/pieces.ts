@@ -59,12 +59,12 @@ export const PIECE_LABEL_ZH: Record<Piece, string> = {
 
 export const SEAT_LABEL_ZH: Record<Seat, string> = {
   0: "红营",
-  1: "蓝营",
+  1: "黑营",
   2: "绿营",
 };
 
 export const SEAT_COLOR: Record<Seat, string> = {
   0: "#e85d4c",
-  1: "#4c8fe8",
+  1: "#1e2422",
   2: "#3db87a",
 };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { SEAT_LABEL_ZH, type Seat } from "@sanguo/shared";
+import { JOIN_VALUE, SEAT_LABEL_ZH, formatMon, type Seat } from "@sanguo/shared";
 import {
   PHASE_LABEL,
   fetchGames,
@@ -21,7 +21,7 @@ type Props = {
   onOpenPlayer?: (address: string) => void;
 };
 
-type Tab = "games" | "board";
+type Tab = "games" | "board" | "open";
 
 const winnerText = (g: IndexedGame) =>
   g.winnerSeat < 3 ? `胜者 ${SEAT_LABEL_ZH[g.winnerSeat as Seat]}` : "未定胜者";
@@ -35,6 +35,8 @@ const winnerText = (g: IndexedGame) =>
 export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props) {
   const [tab, setTab] = useState<Tab>("games");
   const [games, setGames] = useState<IndexedGame[] | null>(null);
+  /** 还在等人、且有空位的公开房（房间发现） */
+  const [openTables, setOpenTables] = useState<IndexedGame[] | null>(null);
   const [board, setBoard] = useState<LeaderboardRow[] | null>(null);
   const [up, setUp] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,9 +49,20 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
       setLoading(false);
       return;
     }
-    const [g, b] = await Promise.all([fetchGames({ limit: 12 }), fetchLeaderboard(10)]);
+    const [g, b, lobby] = await Promise.all([
+      fetchGames({ limit: 12 }),
+      fetchLeaderboard(10),
+      // phase 0 = 大厅。只留"已经坐了人但还没满"的，空房不算可加入。
+      fetchGames({ limit: 30, phase: 0 }),
+    ]);
     setGames(g);
     setBoard(b);
+    setOpenTables(
+      (lobby ?? []).filter((x) => {
+        const seated = (x.seats ?? []).filter((s) => s.occupied).length;
+        return seated >= 1 && seated < 3;
+      })
+    );
     setLoading(false);
   }, []);
 
@@ -90,6 +103,13 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
               onClick={() => setTab("games")}
             >
               对局历史
+            </button>
+            <button
+              className={tab === "open" ? "primary" : "ghost"}
+              style={{ padding: "0.3rem 0.7rem", fontSize: "0.78rem" }}
+              onClick={() => setTab("open")}
+            >
+              找房间{openTables && openTables.length > 0 ? ` (${openTables.length})` : ""}
             </button>
             <button
               className={tab === "board" ? "primary" : "ghost"}
@@ -154,6 +174,52 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
                   )}
                 </button>
               ))}
+            </div>
+          )}
+
+          {tab === "open" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {openTables === null && (
+                <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>读取中…</p>
+              )}
+              {openTables?.length === 0 && (
+                <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
+                  现在没有正在等人的房间。开一局并复制邀请链接，或稍后再看。
+                </p>
+              )}
+              {openTables?.map((g) => {
+                const occ = (g.seats ?? []).filter((s) => s.occupied);
+                const free = 3 - occ.length;
+                return (
+                  <button
+                    key={g.gameId}
+                    className="ghost"
+                    onClick={() => onPickGame?.(g.gameId)}
+                    style={{
+                      textAlign: "left",
+                      padding: "0.45rem 0.6rem",
+                      fontSize: "0.76rem",
+                      lineHeight: 1.5,
+                      border: "1px solid var(--border)",
+                      borderRadius: 10,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <strong>房间 #{g.gameId}</strong>
+                      <span style={{ color: "var(--gold)" }}>还差 {free} 人</span>
+                    </div>
+                    <div style={{ color: "var(--muted)" }}>
+                      已入座：
+                      {occ
+                        .map((s) => `${SEAT_LABEL_ZH[s.seat as Seat]} ${shortAddr(s.player)}`)
+                        .join(" · ")}
+                    </div>
+                  </button>
+                );
+              })}
+              <p style={{ fontSize: "0.7rem", color: "var(--muted)", marginTop: 4 }}>
+                点一个房间即切到那一局；入座需要 {formatMon(JOIN_VALUE)} MON。
+              </p>
             </div>
           )}
 

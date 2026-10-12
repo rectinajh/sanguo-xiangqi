@@ -14,7 +14,7 @@ export function pickAiMove(
     board.ply - opts.activatedPly >= 10;
   if ((opts.forceBetrayal || ripe) && opts.allySeat !== null) {
     const hits = moves.filter(
-      (m) => m.capture === Piece.Advisor && board.cells[m.to.y][m.to.x].seat === opts.allySeat
+      (m) => m.capture === Piece.Advisor && board.cells[m.to.x].seat === opts.allySeat
     );
     if (hits.length) {
       hits.sort((a, b) => (a.fee < b.fee ? -1 : a.fee > b.fee ? 1 : 0));

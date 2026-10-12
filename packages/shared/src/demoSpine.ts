@@ -1,7 +1,9 @@
-import { applyMove, initialBoard, isLegalMove, type BoardState } from "./board.js";
-import { computeMoveFee } from "./fees.js";
+import { applyMove, initialBoard, isLegalMove, moveSteps, type BoardState } from "./board.js";
+import { computeMoveFeeBySteps } from "./fees.js";
 import { pickAiMove } from "./policy.js";
 import { Piece, type Seat } from "./pieces.js";
+import { campNode } from "./sanrenSetup.js";
+import { SANREN_MAP } from "./sanrenMap.js";
 
 export type DemoMove = {
   seat: Seat;
@@ -11,25 +13,63 @@ export type DemoMove = {
   tag: "cheap" | "quiet" | "loyalty" | "expensive" | "betray";
 };
 
+/**
+ * Demo 专用开局：把绿马前移到可一步吃红士的位置，压缩背刺演示手数。
+ * 正式对局用 initialBoard()（马归位、兵隔位）。
+ */
+export function demoInitialBoard(): BoardState {
+  const b = initialBoard();
+  const horseFrom = campNode(SANREN_MAP, 2, 1, 0);
+  const horseAt = 63;
+  const hp = b.cells[horseFrom];
+  b.cells[horseFrom] = { piece: Piece.Empty, seat: null };
+  b.cells[horseAt] = hp;
+  return b;
+}
+
 /** Scripted legal line: cheap soldier, expensive chariot, then a real advisor capture. */
 export function demoSpine(): { moves: DemoMove[]; cheapFee: bigint; chariotFee: bigint } {
-  const cheap = { seat: 0 as Seat, from: { x: 5, y: 7 }, to: { x: 5, y: 6 }, piece: Piece.Soldier, tag: "cheap" as const };
-  const quiet1 = { seat: 1 as Seat, from: { x: 3, y: 1 }, to: { x: 4, y: 1 }, piece: Piece.Soldier, tag: "quiet" as const };
-  const loyalty = { seat: 2 as Seat, from: { x: 9, y: 3 }, to: { x: 9, y: 4 }, piece: Piece.Soldier, tag: "loyalty" as const };
+  const cheap = {
+    seat: 0 as Seat,
+    from: { x: campNode(SANREN_MAP, 0, 4, 3), y: 0 },
+    to: { x: campNode(SANREN_MAP, 0, 4, 4), y: 0 },
+    piece: Piece.Soldier,
+    tag: "cheap" as const,
+  };
+  const quiet1 = {
+    seat: 1 as Seat,
+    from: { x: campNode(SANREN_MAP, 1, 4, 3), y: 0 },
+    to: { x: campNode(SANREN_MAP, 1, 4, 4), y: 0 },
+    piece: Piece.Soldier,
+    tag: "quiet" as const,
+  };
+  const loyalty = {
+    seat: 2 as Seat,
+    from: { x: campNode(SANREN_MAP, 2, 4, 3), y: 0 },
+    to: { x: campNode(SANREN_MAP, 2, 4, 4), y: 0 },
+    piece: Piece.Soldier,
+    tag: "loyalty" as const,
+  };
   const expensive = {
     seat: 0 as Seat,
-    from: { x: 7, y: 10 },
-    to: { x: 10, y: 10 },
+    from: { x: campNode(SANREN_MAP, 0, 8, 0), y: 0 },
+    to: { x: 67, y: 0 },
     piece: Piece.Chariot,
     tag: "expensive" as const,
   };
-  const quiet2 = { seat: 1 as Seat, from: { x: 1, y: 3 }, to: { x: 1, y: 4 }, piece: Piece.Soldier, tag: "quiet" as const };
+  const quiet2 = {
+    seat: 1 as Seat,
+    from: { x: campNode(SANREN_MAP, 1, 2, 3), y: 0 },
+    to: { x: campNode(SANREN_MAP, 1, 2, 4), y: 0 },
+    piece: Piece.Soldier,
+    tag: "quiet" as const,
+  };
 
-  let board = initialBoard();
+  let board = demoInitialBoard();
   const prefix = [cheap, quiet1, loyalty, expensive, quiet2];
   for (const m of prefix) {
     if (!isLegalMove(board, m.seat, m.from, m.to)) {
-      throw new Error(`demo move illegal: ${m.tag}`);
+      throw new Error(`demo move illegal: ${m.tag} ${m.from.x}→${m.to.x}`);
     }
     board = applyMove(board, m.seat, m.from, m.to).board;
   }
@@ -41,21 +81,24 @@ export function demoSpine(): { moves: DemoMove[]; cheapFee: bigint; chariotFee: 
     seat: board.turn,
     from: betray.from,
     to: betray.to,
-    piece: board.cells[betray.from.y][betray.from.x].piece,
+    piece: board.cells[betray.from.x].piece,
     tag: "betray",
   };
+  const chariotSteps = moveSteps(Piece.Chariot, expensive.from.x, expensive.to.x);
   return {
     moves: [...prefix, betrayMove],
-    cheapFee: computeMoveFee(Piece.Soldier, cheap.from, cheap.to),
-    chariotFee: computeMoveFee(Piece.Chariot, expensive.from, expensive.to),
+    cheapFee: computeMoveFeeBySteps(Piece.Soldier, 1),
+    chariotFee: computeMoveFeeBySteps(Piece.Chariot, chariotSteps),
   };
 }
 
 export function boardAfter(moves: DemoMove[], count: number): BoardState {
-  let board = initialBoard();
+  let board = demoInitialBoard();
   for (let i = 0; i < count; i++) {
     const m = moves[i];
     board = applyMove(board, m.seat, m.from, m.to).board;
   }
   return board;
 }
+
+export { initialBoard };

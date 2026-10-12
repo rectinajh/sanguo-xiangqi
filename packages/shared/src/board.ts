@@ -1,155 +1,218 @@
-import { BOARD_W, BOARD_H } from "./constants.js";
+import { NODE_COUNT } from "./constants.js";
 import { Piece, Seat, PIECE_POINTS } from "./pieces.js";
-import { Coord, chebyshev, computeMoveFee } from "./fees.js";
+import { Coord, computeMoveFeeBySteps } from "./fees.js";
+import { campNode, initialSanrenPieces } from "./sanrenSetup.js";
+import {
+  CITADEL,
+  SANREN_GRAPH,
+  bfsDist,
+  horseLandingWithAdj,
+  localFr,
+  nodeCamp,
+  type SanrenGraph,
+} from "./sanrenGraph.js";
+import { SANREN_MAP } from "./sanrenMap.js";
 
 export type Cell = { piece: Piece; seat: Seat | null };
 
+/** Node-graph board. `cells[nodeId]`. Coord.x = nodeId, Coord.y unused (0). */
 export type BoardState = {
-  cells: Cell[][]; // [y][x]
+  cells: Cell[];
   turn: Seat;
-  eliminated: boolean[]; // per seat
+  eliminated: boolean[];
   ply: number;
 };
 
+const G = SANREN_GRAPH;
+
 export function emptyBoard(): BoardState {
-  const cells: Cell[][] = [];
-  for (let y = 0; y < BOARD_H; y++) {
-    const row: Cell[] = [];
-    for (let x = 0; x < BOARD_W; x++) {
-      row.push({ piece: Piece.Empty, seat: null });
-    }
-    cells.push(row);
-  }
+  const cells: Cell[] = Array.from({ length: NODE_COUNT }, () => ({
+    piece: Piece.Empty,
+    seat: null,
+  }));
   return { cells, turn: 0, eliminated: [false, false, false], ply: 0 };
 }
 
-function put(b: BoardState, x: number, y: number, piece: Piece, seat: Seat) {
-  b.cells[y][x] = { piece, seat };
-}
-
-/**
- * Simplified 3-camp layout on 11×11:
- * Seat 0 (红) bottom, Seat 1 (蓝) top-leftish, Seat 2 (绿) top-rightish.
- * Each camp: 1帅 1士 1象 1马 1车 1炮 3卒 — playable, not encyclopedia.
- */
 export function initialBoard(): BoardState {
   const b = emptyBoard();
-
-  // Seat 0 — bottom (y=10 palace area)
-  put(b, 5, 10, Piece.General, 0);
-  put(b, 4, 10, Piece.Advisor, 0);
-  put(b, 6, 10, Piece.Elephant, 0);
-  put(b, 3, 10, Piece.Horse, 0);
-  put(b, 7, 10, Piece.Chariot, 0);
-  put(b, 5, 8, Piece.Cannon, 0);
-  put(b, 3, 7, Piece.Soldier, 0);
-  put(b, 5, 7, Piece.Soldier, 0);
-  put(b, 7, 7, Piece.Soldier, 0);
-
-  // Seat 1 — top-left
-  put(b, 0, 0, Piece.General, 1);
-  put(b, 1, 0, Piece.Advisor, 1);
-  put(b, 0, 1, Piece.Elephant, 1);
-  put(b, 2, 0, Piece.Horse, 1);
-  put(b, 0, 2, Piece.Chariot, 1);
-  put(b, 2, 2, Piece.Cannon, 1);
-  put(b, 3, 1, Piece.Soldier, 1);
-  put(b, 3, 3, Piece.Soldier, 1);
-  put(b, 1, 3, Piece.Soldier, 1);
-
-  // Seat 2 — top-right
-  put(b, 10, 0, Piece.General, 2);
-  put(b, 9, 0, Piece.Advisor, 2);
-  put(b, 10, 1, Piece.Elephant, 2);
-  // Closer to seat 0's advisor so a real betrayal capture is a few legal moves away.
-  put(b, 6, 9, Piece.Horse, 2);
-  put(b, 10, 2, Piece.Chariot, 2);
-  put(b, 8, 2, Piece.Cannon, 2);
-  put(b, 7, 1, Piece.Soldier, 2);
-  put(b, 7, 3, Piece.Soldier, 2);
-  put(b, 9, 3, Piece.Soldier, 2);
-
+  for (const p of initialSanrenPieces()) {
+    b.cells[p.node] = { piece: p.piece, seat: p.seat as Seat };
+  }
   return b;
 }
 
-export function inBounds(x: number, y: number): boolean {
-  return x >= 0 && x < BOARD_W && y >= 0 && y < BOARD_H;
+export function inBoundsNode(n: number): boolean {
+  return n >= 0 && n < NODE_COUNT;
 }
 
-function at(b: BoardState, x: number, y: number): Cell {
-  return b.cells[y][x];
+/** @deprecated use inBoundsNode — kept for callers that still pass x as node */
+export function inBounds(x: number, _y?: number): boolean {
+  return inBoundsNode(x);
 }
 
-function clearPath(b: BoardState, from: Coord, to: Coord): boolean {
-  const dx = Math.sign(to.x - from.x);
-  const dy = Math.sign(to.y - from.y);
-  let x = from.x + dx;
-  let y = from.y + dy;
-  while (x !== to.x || y !== to.y) {
-    if (at(b, x, y).piece !== Piece.Empty) return false;
-    x += dx;
-    y += dy;
+function at(b: BoardState, node: number): Cell {
+  return b.cells[node];
+}
+
+function occupied(b: BoardState, node: number): boolean {
+  return at(b, node).piece !== Piece.Empty;
+}
+
+/** Walk along a line from `from` toward `to` (must share a map line). Returns intermediate nodes. */
+function linePath(from: number, to: number): number[] | null {
+  if (from === to) return [];
+  for (const line of SANREN_MAP.lines) {
+    const i = line.nodes.indexOf(from);
+    const j = line.nodes.indexOf(to);
+    if (i < 0 || j < 0) continue;
+    const lo = Math.min(i, j);
+    const hi = Math.max(i, j);
+    const slice = line.nodes.slice(lo, hi + 1);
+    if (i > j) slice.reverse();
+    return slice.slice(1, -1); // between
   }
-  return true;
+  // Also allow multi-hop along adjacency if on same polyline segments — already covered by lines.
+  return null;
 }
 
-function countBetween(b: BoardState, from: Coord, to: Coord): number {
-  const dx = Math.sign(to.x - from.x);
-  const dy = Math.sign(to.y - from.y);
-  let x = from.x + dx;
-  let y = from.y + dy;
-  let n = 0;
-  while (x !== to.x || y !== to.y) {
-    if (at(b, x, y).piece !== Piece.Empty) n++;
-    x += dx;
-    y += dy;
+function clearBetween(b: BoardState, from: number, to: number): boolean {
+  const mid = linePath(from, to);
+  if (!mid) return false;
+  return mid.every((n) => !occupied(b, n));
+}
+
+function countBetween(b: BoardState, from: number, to: number): number {
+  const mid = linePath(from, to);
+  if (!mid) return -1;
+  return mid.filter((n) => occupied(b, n)).length;
+}
+
+function stepsAlong(from: number, to: number): number {
+  const mid = linePath(from, to);
+  if (!mid) return 0;
+  return mid.length + 1;
+}
+
+function adjacent(a: number, b: number): boolean {
+  return G.adj[a].includes(b);
+}
+
+function sameCampNode(node: number, seat: Seat): boolean {
+  return G.campNodes[seat].has(node) && nodeCamp(SANREN_MAP, node) === seat;
+}
+
+function isPalace(node: number, seat: Seat): boolean {
+  return G.palace[seat].has(node);
+}
+
+/** Soldier forward/sideways helpers */
+function soldierOk(b: BoardState, seat: Seat, from: number, to: number): boolean {
+  if (!adjacent(from, to)) return false;
+  const fromCamp = nodeCamp(SANREN_MAP, from);
+  const toCamp = nodeCamp(SANREN_MAP, to);
+
+  // Own camp: only forward along file toward center (increasing r)
+  if (fromCamp === seat) {
+    const a = localFr(SANREN_MAP, from, seat);
+    const c = localFr(SANREN_MAP, to, seat);
+    if (a && c && a.f === c.f && c.r === a.r + 1) return true;
+    // Leaving toward citadel via f4 r4 → gate
+    if (a && a.f === 4 && a.r === 4 && to === G.gate[seat]) return true;
+    return false;
   }
-  return n;
+
+  // Citadel: forward = increase dist from own gate; sideways = same dist
+  if (fromCamp === CITADEL || toCamp === CITADEL) {
+    const d0 = bfsDist(G.adj, G.gate[seat], from);
+    const d1 = bfsDist(G.adj, G.gate[seat], to);
+    if (d0 < 0 || d1 < 0) return false;
+    return d1 > d0 || d1 === d0; // forward or sideways, never closer to gate (= backward)
+  }
+
+  // Foreign camp: forward toward that camp's back (decreasing r); sideways same r
+  const camp = fromCamp <= 2 ? fromCamp : toCamp;
+  if (camp > 2) return false;
+  const a = localFr(SANREN_MAP, from, camp);
+  const c = localFr(SANREN_MAP, to, camp);
+  if (!a || !c) return false;
+  if (a.r === c.r && Math.abs(a.f - c.f) === 1) return true; // sideways
+  if (a.f === c.f && c.r === a.r - 1) return true; // toward back rank
+  return false;
 }
 
-/** Simplified move legality inspired by Xiangqi */
+export function moveSteps(piece: Piece, from: number, to: number): number {
+  if (piece === Piece.Horse || piece === Piece.Elephant) return 2;
+  if (piece === Piece.Advisor) return 1;
+  const s = stepsAlong(from, to);
+  return s > 0 ? s : 1;
+}
+
 export function isLegalMove(b: BoardState, seat: Seat, from: Coord, to: Coord): boolean {
-  if (!inBounds(from.x, from.y) || !inBounds(to.x, to.y)) return false;
-  if (from.x === to.x && from.y === to.y) return false;
-  const src = at(b, from.x, from.y);
+  const f = from.x;
+  const t = to.x;
+  if (!inBoundsNode(f) || !inBoundsNode(t) || f === t) return false;
+  const src = at(b, f);
   if (src.piece === Piece.Empty || src.seat !== seat) return false;
-  const dst = at(b, to.x, to.y);
+  const dst = at(b, t);
   if (dst.seat === seat) return false;
 
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const adx = Math.abs(dx);
-  const ady = Math.abs(dy);
-
   switch (src.piece) {
-    case Piece.General:
-      // Orthogonal 1 step, stay near own palace loosely (any cell within chebyshev 3 of start for MVP)
-      if (!((adx === 1 && ady === 0) || (adx === 0 && ady === 1))) return false;
-      return true;
-    case Piece.Advisor:
-      if (!(adx === 1 && ady === 1)) return false;
-      return true;
-    case Piece.Elephant:
-      if (!(adx === 2 && ady === 2)) return false;
-      // cannot jump eye
-      return at(b, from.x + dx / 2, from.y + dy / 2).piece === Piece.Empty;
-    case Piece.Horse: {
-      if (!((adx === 2 && ady === 1) || (adx === 1 && ady === 2))) return false;
-      const hx = adx === 2 ? from.x + Math.sign(dx) : from.x;
-      const hy = ady === 2 ? from.y + Math.sign(dy) : from.y;
-      return at(b, hx, hy).piece === Piece.Empty;
+    case Piece.General: {
+      if (!isPalace(f, seat) || !isPalace(t, seat)) return false;
+      return adjacent(f, t);
     }
-    case Piece.Chariot:
-      if (!(dx === 0 || dy === 0)) return false;
-      return clearPath(b, from, to);
-    case Piece.Cannon:
-      if (!(dx === 0 || dy === 0)) return false;
-      if (dst.piece === Piece.Empty) return clearPath(b, from, to);
-      return countBetween(b, from, to) === 1;
+    case Piece.Advisor: {
+      if (!isPalace(f, seat) || !isPalace(t, seat)) return false;
+      // diagonal one step: share a palace diagonal segment
+      for (const line of SANREN_MAP.lines) {
+        if (!line.name.startsWith(`${seat}:pal`)) continue;
+        const i = line.nodes.indexOf(f);
+        const j = line.nodes.indexOf(t);
+        if (i >= 0 && j >= 0 && Math.abs(i - j) === 1) return true;
+      }
+      // also allow any diagonal adjacency inside palace (corner step)
+      if (!adjacent(f, t)) return false;
+      const a = localFr(SANREN_MAP, f, seat);
+      const c = localFr(SANREN_MAP, t, seat);
+      return !!a && !!c && Math.abs(a.f - c.f) === 1 && Math.abs(a.r - c.r) === 1;
+    }
+    case Piece.Elephant: {
+      if (!sameCampNode(f, seat) || !sameCampNode(t, seat)) return false;
+      const a = localFr(SANREN_MAP, f, seat);
+      const c = localFr(SANREN_MAP, t, seat);
+      if (!a || !c) return false;
+      if (Math.abs(a.f - c.f) !== 2 || Math.abs(a.r - c.r) !== 2) return false;
+      const ef = (a.f + c.f) / 2;
+      const er = (a.r + c.r) / 2;
+      if (!Number.isInteger(ef) || !Number.isInteger(er)) return false;
+      try {
+        const eye = campNode(SANREN_MAP, seat, ef, er);
+        return !occupied(b, eye);
+      } catch {
+        return false;
+      }
+    }
+    case Piece.Horse: {
+      for (const leg of G.adj[f]) {
+        if (occupied(b, leg)) continue;
+        for (const face of G.faces) {
+          const land = horseLandingWithAdj(G.adj, face, f, leg);
+          if (land === t) return true;
+        }
+      }
+      return false;
+    }
+    case Piece.Chariot: {
+      if (!linePath(f, t)) return false;
+      return clearBetween(b, f, t);
+    }
+    case Piece.Cannon: {
+      if (!linePath(f, t)) return false;
+      if (dst.piece === Piece.Empty) return clearBetween(b, f, t);
+      return countBetween(b, f, t) === 1;
+    }
     case Piece.Soldier:
-      // one step orthogonal (forward preference relaxed for 3-player)
-      if (!((adx === 1 && ady === 0) || (adx === 0 && ady === 1))) return false;
-      return true;
+      return soldierOk(b, seat, f, t);
     default:
       return false;
   }
@@ -160,24 +223,20 @@ export type LegalMove = { from: Coord; to: Coord; fee: bigint; capture: Piece };
 export function legalMoves(b: BoardState, seat: Seat): LegalMove[] {
   const out: LegalMove[] = [];
   if (b.eliminated[seat]) return out;
-  for (let y = 0; y < BOARD_H; y++) {
-    for (let x = 0; x < BOARD_W; x++) {
-      const c = at(b, x, y);
-      if (c.seat !== seat || c.piece === Piece.Empty) continue;
-      for (let ty = 0; ty < BOARD_H; ty++) {
-        for (let tx = 0; tx < BOARD_W; tx++) {
-          const from = { x, y };
-          const to = { x: tx, y: ty };
-          if (!isLegalMove(b, seat, from, to)) continue;
-          const capture = at(b, tx, ty).piece;
-          out.push({
-            from,
-            to,
-            fee: computeMoveFee(c.piece, from, to),
-            capture,
-          });
-        }
-      }
+  for (let f = 0; f < NODE_COUNT; f++) {
+    const c = at(b, f);
+    if (c.seat !== seat || c.piece === Piece.Empty) continue;
+    for (let t = 0; t < NODE_COUNT; t++) {
+      const from = { x: f, y: 0 };
+      const to = { x: t, y: 0 };
+      if (!isLegalMove(b, seat, from, to)) continue;
+      const steps = moveSteps(c.piece, f, t);
+      out.push({
+        from,
+        to,
+        fee: computeMoveFeeBySteps(c.piece, steps),
+        capture: at(b, t).piece,
+      });
     }
   }
   return out;
@@ -185,10 +244,8 @@ export function legalMoves(b: BoardState, seat: Seat): LegalMove[] {
 
 export function minAffordableLegalMoveFee(b: BoardState, seat: Seat): bigint | null {
   const moves = legalMoves(b, seat);
-  if (moves.length === 0) return null;
-  let min = moves[0].fee;
-  for (const m of moves) if (m.fee < min) min = m.fee;
-  return min;
+  if (!moves.length) return null;
+  return moves.reduce((a, m) => (m.fee < a ? m.fee : a), moves[0].fee);
 }
 
 export type ApplyResult = {
@@ -201,13 +258,13 @@ export type ApplyResult = {
 export function applyMove(b: BoardState, seat: Seat, from: Coord, to: Coord): ApplyResult {
   if (!isLegalMove(b, seat, from, to)) throw new Error("非法走子");
   const next: BoardState = {
-    cells: b.cells.map((row) => row.map((c) => ({ ...c }))),
+    cells: b.cells.map((c) => ({ ...c })),
     turn: b.turn,
     eliminated: [...b.eliminated],
     ply: b.ply + 1,
   };
-  const src = next.cells[from.y][from.x];
-  const dst = next.cells[to.y][to.x];
+  const src = next.cells[from.x];
+  const dst = next.cells[to.x];
   const captured = dst.piece;
   const capturedSeat = dst.seat;
   let defeated: Seat | null = null;
@@ -215,10 +272,9 @@ export function applyMove(b: BoardState, seat: Seat, from: Coord, to: Coord): Ap
     defeated = capturedSeat;
     next.eliminated[capturedSeat] = true;
   }
-  next.cells[to.y][to.x] = { piece: src.piece, seat };
-  next.cells[from.y][from.x] = { piece: Piece.Empty, seat: null };
+  next.cells[to.x] = { piece: src.piece, seat };
+  next.cells[from.x] = { piece: Piece.Empty, seat: null };
 
-  // advance turn to next non-eliminated
   let t = ((seat + 1) % 3) as Seat;
   for (let i = 0; i < 3; i++) {
     if (!next.eliminated[t]) break;
@@ -239,13 +295,10 @@ export function winner(b: BoardState): Seat | null {
 
 export function materialScore(b: BoardState, seat: Seat): number {
   let s = 0;
-  for (let y = 0; y < BOARD_H; y++) {
-    for (let x = 0; x < BOARD_W; x++) {
-      const c = at(b, x, y);
-      if (c.seat === seat) s += PIECE_POINTS[c.piece];
-    }
-  }
+  for (const c of b.cells) if (c.seat === seat) s += PIECE_POINTS[c.piece];
   return s;
 }
 
-export { chebyshev };
+export function graph(): SanrenGraph {
+  return G;
+}
