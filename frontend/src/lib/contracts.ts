@@ -351,6 +351,31 @@ export async function expireCommit(account: Signer, gameId: bigint) {
   return hash;
 }
 
+/**
+ * 认输：主动出局，把钱留给别人。
+ *
+ * 为什么需要它：没有认输时，唯一能提前结束一局的机制是「等对方 commit 超时 +
+ * 清掉」，而 MAX_PLIES=80、每次超时 60 秒 —— 一局能被拖到接近一小时，钱还锁在
+ * 合约里直到终局。三个人里只要有一个中途走了，另外两人只能陪着走完。
+ *
+ * 认输后任何**已入座**的人都能立刻 finalizeGame（合约里放行了 resigned != 0），
+ * 所以不需要等 80 手。
+ */
+export async function resign(account: Signer, gameId: bigint) {
+  const wallet = getWriteWalletClient(account);
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "resign",
+    args: [gameId],
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
 export async function readSeat(gameId: bigint, seat: number) {
   const pub = getPublicClient();
   const r = (await pub.readContract({

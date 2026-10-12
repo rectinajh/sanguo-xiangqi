@@ -101,6 +101,10 @@ contract GameTable {
         uint64 lobbyIdleSince;
         /// @dev 大厅放弃投票的位图（bit i = 座位 i 已投票）。
         uint8 abandonVotes;
+        /// @dev 主动认输的位图（bit i = 座位 i 已认输）。
+        ///      与"破产出局"区分开：破产后剩下的人要继续打完（他们还有油费可烧），
+        ///      而有人认输时其余玩家不该被迫走完剩下的手数 —— 那是纯浪费时间。
+        uint8 resigned;
     }
 
     uint256 public nextGameId = 1;
@@ -324,6 +328,29 @@ contract GameTable {
             if (g.seats[i].player == who) return (i, true);
         }
         return (0, false);
+    }
+
+    /// @notice 认输：主动出局，把钱留给胜者。
+    ///
+    /// @dev 为什么必须有：没有认输时，唯一能提前结束一局的机制是「等对方
+    ///      commit 超时 + 清掉」（expireCommit），而 MAX_PLIES=80、每次超时 60 秒，
+    ///      一局能被拖到接近一小时 —— 钱还被锁在合约里直到终局。
+    ///      三个人里只要有一个人中途走了，另外两人就只能陪着走完剩下的手数。
+    ///
+    ///      走破产同一条路径（标记出局 + 推进回合 + 剩一人时进入终局判定），
+    ///      这样资金划分规则与"油费耗尽"完全一致，不引入第二套经济学。
+    ///      未出局者的作战余额会作为本局残差进入金库（与破产一致）。
+    function resign(uint256 gameId) external {
+        require(gameId > 0 && gameId < nextGameId, "unknown game");
+        Game storage g = games[gameId];
+        require(g.phase == Phase.Playing, "playing");
+
+        (uint8 mySeat, bool seated) = _seatOf(g, msg.sender);
+        require(seated, "not seated");
+        require(!g.seats[mySeat].eliminated, "out");
+
+        g.resigned |= uint8(1) << mySeat;
+        _bankrupt(g, gameId, mySeat);
     }
 
     function getSeat(uint256 gameId, uint8 seat)
@@ -626,13 +653,22 @@ contract GameTable {
         // 而 _aliveCount 只数"已入座且未出局"的座 —— Lobby 里只坐了一个人时它等于 1，
         // 于是任何人都能把一局还没开始的游戏结算掉：赢家被设成 address(0)、后续 join
         // 全部 revert "lobby"、已入座者的 1 MON 质押永久卡死。已实测复现。
+        // 除了"自然结束"（只剩一人 / 走满 80 手），**有人认输时也允许结算**。
+        // 否则中途认输毫无意义：剩下的两人还是得把 80 手走完才能拿到钱，
+        // 而认输的全部目的就是"别浪费时间、把钱分掉"。
         require(
             g.phase == Phase.Finished
-                || (g.phase == Phase.Playing && (_aliveCount(g) <= 1 || g.ply >= MAX_PLIES)),
+                || (
+                    g.phase == Phase.Playing
+                        && (_aliveCount(g) <= 1 || g.ply >= MAX_PLIES || g.resigned != 0)
+                ),
             "not done"
         );
         if (g.phase != Phase.Finished) {
-            if (_aliveCount(g) == 1) {
+            if (g.resigned != 0 && _aliveCount(g) > 1) {
+                // 有人认输但还有两人在局：按点数选出胜者（认输者已 eliminated，天然被排除）
+                _endByPoints(g, gameId);
+            } else if (_aliveCount(g) == 1) {
                 for (uint8 i = 0; i < 3; i++) {
                     // 必须同时要求 player != address(0)，与 _aliveCount 的谓词保持一致，
                     // 否则空座会被加冕为胜者。

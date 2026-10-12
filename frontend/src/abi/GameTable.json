@@ -876,6 +876,19 @@
   },
   {
     "type": "function",
+    "name": "resign",
+    "inputs": [
+      {
+        "name": "gameId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "revealAiOnly",
     "inputs": [
       {
@@ -1624,5 +1637,10 @@
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "NotPlaying",
+    "inputs": []
   }
 ]

@@ -64,6 +64,7 @@ import {
   claimAbandonRefund,
   abandonStatusOf,
   pendingCommitOf,
+  resign,
   expireCommit,
   commitAndReveal,
   readSeat,
@@ -575,6 +576,28 @@ export default function App() {
     // 立刻拉一次，不用等下一轮轮询
     void refreshRef.current?.(gid, true);
     toast(`已切到房间 #${id}`, "看座位空着就可以入座");
+  }
+
+  /**
+   * 认输：主动出局，把钱留给别人。
+   *
+   * 这是唯一能让一局"提前结束"的玩家主动机制 —— 没有它，三个人里有一个
+   * 中途走了，另外两人只能陪着走完剩下的手数（最多 80 手、每手等 60 秒超时）。
+   * 认输后任何人入座者都能立刻结算，不用等满 80 手。
+   */
+  async function onResign() {
+    if (!walletAddress || gameId === null) return;
+    if (!window.confirm("确定认输？你会立即出局，座位质押与未用完的作战余额归入本局奖池。")) return;
+    setBusy(true);
+    try {
+      await resign(walletAddress, gameId);
+      await refreshRef.current?.(gameId, true);
+      toast("已认输", "本局可以立刻结算了");
+    } catch (e: unknown) {
+      toast("认输失败", friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   /** 复制观战链接：让朋友来看，而不是来抢座。 */
@@ -1351,6 +1374,14 @@ export default function App() {
               </button>
               <button className="secondary" disabled={busy || board.turn !== AI_SEAT} onClick={aiPlayOnce}>
                 导演代走
+              </button>
+              <button
+                className="ghost"
+                disabled={busy || phase !== 1 || !iAmSeated}
+                onClick={onResign}
+                title="主动出局；认输后本局可以立刻结算，不用等满 80 手"
+              >
+                认输
               </button>
             </div>
           </div>
