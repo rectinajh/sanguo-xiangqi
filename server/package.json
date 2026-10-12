@@ -5,7 +5,6 @@
   "type": "module",
   "description": "水龙头服务：用服务端热钱包给测试网新用户发 MON（私钥绝不进前端）",
   "scripts": {
-    "faucet": "tsx src/faucet.ts",
     "typecheck": "tsc --noEmit",
     "indexer": "tsx src/indexer.ts",
     "indexer:once": "tsx src/indexer.ts --once"

@@ -2,11 +2,14 @@
 pragma solidity ^0.8.24;
 
 import {FeeLib} from "./libraries/FeeLib.sol";
+import {SanrenData} from "./libraries/SanrenData.sol";
+import {SanrenRules} from "./libraries/SanrenRules.sol";
 import {AgentRegistry} from "./AgentRegistry.sol";
 
 /// @title GameTable — seats, economy, commit-reveal moves, bankruptcy, finalize
 /// @notice Local MVP / Monad-ready. MON is native ether-unit mock.
 /// @dev AI seat is stored but not emitted until AiRevealed.
+/// @dev Board is the photo-traced sanren graph: fromX/toX = nodeId, fromY/toY must be 0.
 contract GameTable {
     using FeeLib for uint8;
 
@@ -16,16 +19,24 @@ contract GameTable {
     uint256 public constant TIMEOUT_PENALTY = 0.03 ether;
     uint256 public constant ILLEGAL_REVEAL_PENALTY = 0.05 ether;
     uint256 public constant COMMIT_REVEAL_WINDOW = 60;
+    /// @dev 大厅闲置多久后，已入座者可以不需要其他人同意就放弃该局。
+    ///      设 1 小时：正常邀请等待足够长，又不至于让钱被锁死。
+    uint256 public constant LOBBY_ABANDON_TIMEOUT = 1 hours;
     uint256 public constant MAX_PLIES = 80;
     uint256 public constant DEFEAT_STAKE_SHARE_BPS = 4000;
     uint256 public constant POINT_TO_MON_RATE = 0.001 ether;
-    uint8 public constant BOARD_W = 11;
-    uint8 public constant BOARD_H = 11;
+    uint8 public constant NODE_COUNT = 139;
+    /// Legacy names: BOARD_W == NODE_COUNT, BOARD_H == 1 (node board)
+    uint8 public constant BOARD_W = 139;
+    uint8 public constant BOARD_H = 1;
 
     enum Phase {
         Lobby,
         Playing,
-        Finished
+        Finished,
+        /// @dev 大厅被集体放弃：钱不会自动推送，各座用 claimAbandonRefund 自取。
+        ///      放在末尾是为了不改变已有枚举值（前端与索引器都按数字判断阶段）。
+        Abandoned
     }
 
     struct SeatInfo {
@@ -35,6 +46,10 @@ contract GameTable {
         uint32 points;
         bool eliminated;
         bool isAi; // hidden until AiRevealed; never emitted on join
+        /// @dev 大厅被放弃后，该座可以自取的金额（质押 + 作战余额）。
+        ///      用"拉取"而不是"推送"：abandonGame 里对三个座依次转账
+        ///      会引入重入面，也会让放弃交易被某个收款方 revert 卡住。
+        uint256 abandonRefund;
     }
 
     struct PendingCommit {
@@ -66,11 +81,16 @@ contract GameTable {
         uint256[3] feesPaid;
         bool[3] slashed;
         // board packed: piece in low 4 bits, seat+1 in high 4 bits; 0 = empty
-        uint8[11][11] board; // [y][x]
+        uint8[160] board; // index = nodeId
         PendingCommit[3] commits;
         address winner;
         uint8 winnerSeat;
         uint8 secondSeat; // 终局第二名（20% 接收方）；未定则 255
+        /// @dev 大厅最后一次状态变化的时间。用来判断"这局已经晾了多久"，
+        ///      久到超时后允许已入座者单方面放弃（否则一个不来的人能永远锁住别人的钱）。
+        uint64 lobbyIdleSince;
+        /// @dev 大厅放弃投票的位图（bit i = 座位 i 已投票）。
+        uint8 abandonVotes;
     }
 
     uint256 public nextGameId = 1;
@@ -103,6 +123,9 @@ contract GameTable {
     event PayoutSent(uint256 indexed gameId, uint8 seat, uint256 prize, uint256 stakeRefund, uint256 playRefund);
     event TreasuryWithdrawn(address indexed to, uint256 amount);
     event ReputationWriteFailed(uint256 indexed gameId, address indexed ai);
+    event AbandonVoted(uint256 indexed gameId, uint8 seat, address player, uint8 votes, uint8 needed);
+    event GameAbandoned(uint256 indexed gameId, uint8 seatedCount);
+    event AbandonRefundClaimed(uint256 indexed gameId, uint8 seat, address player, uint256 amount);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "owner");
@@ -137,6 +160,7 @@ contract GameTable {
         g.aiSeat = aiSeat;
         g.winnerSeat = 255;
         g.secondSeat = 255;
+        g.lobbyIdleSince = uint64(block.timestamp);
         _setupInitialBoard(g);
         emit GameCreated(gameId);
     }
@@ -152,6 +176,7 @@ contract GameTable {
         g.seats[seat].playBalance = PLAY_BALANCE_INITIAL;
         g.seats[seat].points = 0;
         g.seats[seat].isAi = (seat == g.aiSeat);
+        g.lobbyIdleSince = uint64(block.timestamp); // 有人入座就算"还在活动"
         if (msg.value > SEAT_STAKE + PLAY_BALANCE_INITIAL) {
             g.seats[seat].playBalance += msg.value - (SEAT_STAKE + PLAY_BALANCE_INITIAL);
         }
@@ -171,6 +196,104 @@ contract GameTable {
             g.turn = 0;
             emit GameStarted(gameId);
         }
+    }
+
+    /// @notice 放弃一个卡住的大厅局，让已入座的人能把钱取回去。
+    ///
+    /// @dev 为什么需要它：大厅局没有取消机制时，"有人建了房但不再来"会让另外两人
+    ///      的 1 MON 质押 + 2 MON 作战余额永久卡在合约里（`finalizeGame` 拒绝处理
+    ///      未开打的局，`join` 又因为座位被占而 revert）。实测已经产生过这样一局。
+    ///
+    /// 两种放行条件，满足其一即可：
+    ///   1. 所有**已入座**的玩家都投票放弃 —— 防止单方面卷走别人的局；
+    ///   2. 大厅闲置超过 `LOBBY_ABANDON_TIMEOUT` —— 防止一个不来的玩家无限期锁住别人的钱。
+    ///
+    /// 只对 Lobby 生效：开打之后要走正常的终局结算（那里的资金划分有完整规则）。
+    ///
+    /// 钱用**拉取**而不是推送：一口气给三个座转账会引入重入面，而且只要有一个收款方
+    /// revert，整笔放弃交易就永远做不成。改成各座自己调 `claimAbandonRefund` 取。
+    function abandonGame(uint256 gameId) external {
+        require(gameId > 0 && gameId < nextGameId, "unknown game");
+        Game storage g = games[gameId];
+        require(g.phase == Phase.Lobby, "lobby");
+        require(!g.settled, "settled");
+
+        (uint8 mySeat, bool seated) = _seatOf(g, msg.sender);
+        require(seated, "not seated");
+
+        // ⚠️ 顺序很重要：超时判断必须用**投票前**的 idleSince。
+        //    之前把刷新写在判断之前，等于拿 now 和 now+1h 比，超时分支永远进不去。
+        uint256 idleSinceBefore = g.lobbyIdleSince;
+        g.abandonVotes |= uint8(1) << mySeat;
+        g.lobbyIdleSince = uint64(block.timestamp);
+
+        uint8 seatedCount;
+        uint8 votingCount;
+        for (uint8 i = 0; i < 3; i++) {
+            if (g.seats[i].player == address(0)) continue;
+            seatedCount++;
+            if (g.abandonVotes & (uint8(1) << i) != 0) votingCount++;
+        }
+
+        bool timedOut = block.timestamp >= idleSinceBefore + LOBBY_ABANDON_TIMEOUT;
+        emit AbandonVoted(gameId, mySeat, msg.sender, votingCount, seatedCount);
+        if (votingCount < seatedCount && !timedOut) return;
+
+        // 标记为已放弃并给每个座记下可自取的金额。
+        // 复用 `settled` 是为了让 finalizeGame 的 "settled" 守卫一并覆盖这里。
+        g.phase = Phase.Abandoned;
+        g.settled = true;
+        for (uint8 i = 0; i < 3; i++) {
+            SeatInfo storage si = g.seats[i];
+            if (si.player == address(0)) continue;
+            // playBalance 在入座时已经含了超付部分，所以两项相加就是该座应退全额
+            uint256 amount = si.seatStake + si.playBalance;
+            if (amount == 0) continue;
+            si.seatStake = 0;
+            si.playBalance = 0;
+            si.abandonRefund = amount;
+        }
+        emit GameAbandoned(gameId, seatedCount);
+    }
+
+    /// @notice 取回被放弃大厅局里的钱（拉取模式，见 abandonGame 注释）。
+    function claimAbandonRefund(uint256 gameId) external returns (uint256 amount) {
+        require(gameId > 0 && gameId < nextGameId, "unknown game");
+        Game storage g = games[gameId];
+        require(g.phase == Phase.Abandoned, "not abandoned");
+
+        (uint8 mySeat, bool seated) = _seatOf(g, msg.sender);
+        require(seated, "not seated");
+
+        SeatInfo storage s = g.seats[mySeat];
+        amount = s.abandonRefund;
+        require(amount > 0, "nothing to claim");
+        s.abandonRefund = 0;
+        _pay(msg.sender, amount);
+        emit AbandonRefundClaimed(gameId, mySeat, msg.sender, amount);
+    }
+
+    /// @notice 某个座是否已投票放弃、是否已可领取退款。
+    function abandonStatusOf(uint256 gameId)
+        external
+        view
+        returns (uint8 votes, bool canForceByTimeout, uint256 claimableForCaller)
+    {
+        Game storage g = games[gameId];
+        votes = g.abandonVotes;
+        canForceByTimeout = block.timestamp >= uint256(g.lobbyIdleSince) + LOBBY_ABANDON_TIMEOUT;
+        for (uint8 i = 0; i < 3; i++) {
+            if (g.seats[i].player == msg.sender) claimableForCaller = g.seats[i].abandonRefund;
+        }
+    }
+
+    /// @dev 找出 msg.sender 坐的座位。同一地址可以坐多个座（历史行为，暂不改变），
+    ///      这里返回第一个，使重复入座的语义保持可预期。
+    function _seatOf(Game storage g, address who) internal view returns (uint8 seat, bool found) {
+        for (uint8 i = 0; i < 3; i++) {
+            if (g.seats[i].player == who) return (i, true);
+        }
+        return (0, false);
     }
 
     function getSeat(uint256 gameId, uint8 seat)
@@ -208,14 +331,19 @@ contract GameTable {
         return captureLog[gameId].length;
     }
 
+    /// @param x nodeId · @param y must be 0 (kept for ABI compatibility)
     function cell(uint256 gameId, uint8 x, uint8 y) external view returns (uint8 piece, uint8 seatOr255) {
-        uint8 packed = games[gameId].board[y][x];
+        require(y == 0, "y");
+        require(x < NODE_COUNT, "node");
+        uint8 packed = games[gameId].board[x];
         if (packed == 0) return (0, 255);
         return (packed & 0x0f, (packed >> 4) - 1);
     }
 
     function previewMoveFee(uint8 piece, uint8 x0, uint8 y0, uint8 x1, uint8 y1) external pure returns (uint256) {
-        return FeeLib.moveFee(piece, x0, y0, x1, y1);
+        y0;
+        y1;
+        return SanrenRules.fee(piece, x0, x1);
     }
 
     /// @notice True if attacker captured victim's advisor strictly after the covenant activated.
@@ -291,19 +419,20 @@ contract GameTable {
             return;
         }
 
+        require(fromY == 0 && toY == 0, "use node ids");
         require(_isLegal(g, seat, piece, fromX, fromY, toX, toY), "illegal geom");
 
-        (uint8 dstPiece, uint8 dstSeat) = _unpack(g.board[toY][toX]);
+        (uint8 dstPiece, uint8 dstSeat) = _unpack(g.board[toX]);
 
-        uint256 fee = FeeLib.moveFee(piece, fromX, fromY, toX, toY);
+        uint256 fee = SanrenRules.fee(piece, fromX, toX);
         require(g.seats[seat].playBalance >= fee, "fee");
         g.seats[seat].playBalance -= fee;
         g.moveFeeTreasury += fee;
         g.feesPaid[seat] += fee;
         emit MoveFeePaid(gameId, seat, fee, g.seats[seat].playBalance);
 
-        g.board[fromY][fromX] = 0;
-        g.board[toY][toX] = _pack(piece, seat);
+        g.board[fromX] = 0;
+        g.board[toX] = _pack(piece, seat);
         emit MoveRevealed(gameId, seat, fromX, fromY, toX, toY, piece);
 
         if (dstPiece != 0 && dstSeat < 3) {
@@ -534,29 +663,64 @@ contract GameTable {
         }
     }
 
+    /// @dev 任意合法着法的费用上界（精确值，不是估计）：
+    ///      moveFee = (baseFee + steps × distUnit) × pieceMult
+    ///      最长一条线 15 个点 → steps ≤ 14；pieceMult 最大是车的 2.0。
+    ///      maxFee = (0.010 + 14 × 0.005) × 2.0 = 0.16 MON。
+    uint256 internal constant MAX_POSSIBLE_MOVE_FEE = 0.16 ether;
+
+    /// @dev 任意合法着法的费用下界：baseFee × 卒的系数 0.6 = 0.009 MON。
+    ///      任何着法都是 (baseFee + …) × mult，而 mult 最小就是卒的 0.6。
+    uint256 internal constant MIN_POSSIBLE_MOVE_FEE = 0.009 ether;
+
     function _checkBankruptcy(Game storage g, uint256 gameId, uint8 seat) internal {
         if (g.seats[seat].eliminated || g.phase != Phase.Playing) return;
         if (g.seats[seat].player == address(0)) return;
+
+        uint256 bal = g.seats[seat].playBalance;
+
+        // 三档判定。首尾两档都能给出**与全量扫描完全一致**的结论，
+        // 只有夹在中间的窄带才需要真扫。
+        //
+        // 为什么必须这样：_minLegalFee 是全量枚举 ——
+        // NODE_COUNT² × 棋子数 ≈ 139×139×16 ≈ 3×10^5 次 isLegal，实测约 3800 万 gas，
+        // 超过 3000 万的区块上限。而 _checkBankruptcy 每次 revealMove 会被调用两次
+        // （走子方 + 下一方），所以正常走一步都会 Out of gas。
+
+        // (1) 余额高于"最贵着法"的上界 → 一定付得起最便宜的那一步。未破产。
+        if (bal > MAX_POSSIBLE_MOVE_FEE) return;
+
+        // (2) 余额低于"最便宜着法"的下界 → 连理论最低价都付不起。必定破产，无需扫描。
+        if (bal < MIN_POSSIBLE_MOVE_FEE) {
+            _bankrupt(g, gameId, seat);
+            return;
+        }
+
+        // (3) 窄带（0.009 ~ 0.16 MON）：最便宜着法是否付得起取决于盘面，只能精确扫描。
         (bool any, uint256 minFee) = _minLegalFee(g, seat);
-        // No legal move, or playBalance cannot cover the cheapest one. Stake never subsidises a move.
-        if (!any || g.seats[seat].playBalance < minFee) {
-            g.seats[seat].eliminated = true;
-            g.orphanPoints += g.seats[seat].points;
-            g.seats[seat].points = 0;
-            g.prizePool += g.seats[seat].seatStake;
-            g.seats[seat].seatStake = 0;
-            emit SeatBankrupt(gameId, seat, 255);
-            if (_aliveCount(g) == 1) {
-                for (uint8 i = 0; i < 3; i++) {
-                    if (!g.seats[i].eliminated) {
-                        g.phase = Phase.Finished;
-                        g.winnerSeat = i;
-                        g.winner = g.seats[i].player;
-                    }
+        if (!any || bal < minFee) {
+            _bankrupt(g, gameId, seat);
+        }
+    }
+
+    /// @dev 破产结算：点数转入孤儿池、质押进奖池、若有唯一幸存者则终局。
+    function _bankrupt(Game storage g, uint256 gameId, uint8 seat) internal {
+        g.seats[seat].eliminated = true;
+        g.orphanPoints += g.seats[seat].points;
+        g.seats[seat].points = 0;
+        g.prizePool += g.seats[seat].seatStake;
+        g.seats[seat].seatStake = 0;
+        emit SeatBankrupt(gameId, seat, 255);
+        if (_aliveCount(g) == 1) {
+            for (uint8 i = 0; i < 3; i++) {
+                if (!g.seats[i].eliminated && g.seats[i].player != address(0)) {
+                    g.phase = Phase.Finished;
+                    g.winnerSeat = i;
+                    g.winner = g.seats[i].player;
                 }
-            } else if (g.turn == seat) {
-                _advanceTurn(g);
             }
+        } else if (g.turn == seat) {
+            _advanceTurn(g);
         }
     }
 
@@ -730,201 +894,32 @@ contract GameTable {
         view
         returns (bool)
     {
-        if (x0 >= BOARD_W || y0 >= BOARD_H || x1 >= BOARD_W || y1 >= BOARD_H) return false;
-        if (x0 == x1 && y0 == y1) return false;
-        (uint8 boardPiece, uint8 boardSeat) = _unpack(g.board[y0][x0]);
-        if (boardPiece != piece || boardSeat != seat) return false;
-        (uint8 dstPiece, uint8 dstSeat) = _unpack(g.board[y1][x1]);
-        if (dstSeat == seat) return false;
-
-        uint8 adx = x0 > x1 ? x0 - x1 : x1 - x0;
-        uint8 ady = y0 > y1 ? y0 - y1 : y1 - y0;
-
-        if (piece == 1 || piece == 7) return adx + ady == 1;
-        if (piece == 2) return adx == 1 && ady == 1;
-        if (piece == 3) {
-            if (!(adx == 2 && ady == 2)) return false;
-            return g.board[(y0 + y1) / 2][(x0 + x1) / 2] == 0;
-        }
-        if (piece == 4) {
-            if (!((adx == 2 && ady == 1) || (adx == 1 && ady == 2))) return false;
-            uint8 hx = x0;
-            uint8 hy = y0;
-            if (adx == 2) hx = x1 > x0 ? x0 + 1 : x0 - 1;
-            else hy = y1 > y0 ? y0 + 1 : y0 - 1;
-            return g.board[hy][hx] == 0;
-        }
-        if (piece == 5 || piece == 6) {
-            if (!((adx == 0 || ady == 0) && adx + ady > 0)) return false;
-            uint256 between = _countBetween(g, x0, y0, x1, y1);
-            if (piece == 5) return between == 0;
-            if (dstPiece == 0) return between == 0;
-            return between == 1;
-        }
-        return false;
-    }
-
-    function _countBetween(Game storage g, uint8 x0, uint8 y0, uint8 x1, uint8 y1) internal view returns (uint256 n) {
-        int256 sx = x1 > x0 ? int256(1) : (x1 < x0 ? int256(-1) : int256(0));
-        int256 sy = y1 > y0 ? int256(1) : (y1 < y0 ? int256(-1) : int256(0));
-        int256 x = int256(uint256(x0)) + sx;
-        int256 y = int256(uint256(y0)) + sy;
-        while (x != int256(uint256(x1)) || y != int256(uint256(y1))) {
-            if (g.board[uint8(uint256(y))][uint8(uint256(x))] != 0) n++;
-            x += sx;
-            y += sy;
-        }
+        if (y0 != 0 || y1 != 0) return false;
+        return SanrenRules.isLegal(g.board, seat, piece, x0, x1);
     }
 
     function _minLegalFee(Game storage g, uint8 seat) internal view returns (bool any, uint256 minFee) {
         minFee = type(uint256).max;
-        for (uint8 y = 0; y < BOARD_H; y++) {
-            for (uint8 x = 0; x < BOARD_W; x++) {
-                (uint8 piece, uint8 s) = _unpack(g.board[y][x]);
-                if (piece == 0 || s != seat) continue;
-                (any, minFee) = _minFromPiece(g, seat, piece, x, y, any, minFee);
+        for (uint8 from = 0; from < NODE_COUNT; from++) {
+            (uint8 piece, uint8 s) = _unpack(g.board[from]);
+            if (piece == 0 || s != seat) continue;
+            for (uint8 to = 0; to < NODE_COUNT; to++) {
+                if (!_isLegal(g, seat, piece, from, 0, to, 0)) continue;
+                uint256 fee = SanrenRules.fee(piece, from, to);
+                if (!any || fee < minFee) {
+                    any = true;
+                    minFee = fee;
+                }
             }
         }
     }
 
-    function _minFromPiece(
-        Game storage g,
-        uint8 seat,
-        uint8 piece,
-        uint8 x,
-        uint8 y,
-        bool any,
-        uint256 minFee
-    ) internal view returns (bool, uint256) {
-        if (piece == 5 || piece == 6) {
-            (any, minFee) = _ray(g, seat, piece, x, y, 1, 0, any, minFee);
-            (any, minFee) = _ray(g, seat, piece, x, y, -1, 0, any, minFee);
-            (any, minFee) = _ray(g, seat, piece, x, y, 0, 1, any, minFee);
-            (any, minFee) = _ray(g, seat, piece, x, y, 0, -1, any, minFee);
-            return (any, minFee);
-        }
-        if (piece == 4) {
-            (any, minFee) = _step(g, seat, piece, x, y, 2, 1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, 2, -1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -2, 1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -2, -1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, 1, 2, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, 1, -2, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -1, 2, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -1, -2, any, minFee);
-            return (any, minFee);
-        }
-        if (piece == 3) {
-            (any, minFee) = _step(g, seat, piece, x, y, 2, 2, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, 2, -2, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -2, 2, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -2, -2, any, minFee);
-            return (any, minFee);
-        }
-        if (piece == 2) {
-            (any, minFee) = _step(g, seat, piece, x, y, 1, 1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, 1, -1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -1, 1, any, minFee);
-            (any, minFee) = _step(g, seat, piece, x, y, -1, -1, any, minFee);
-            return (any, minFee);
-        }
-        (any, minFee) = _step(g, seat, piece, x, y, 1, 0, any, minFee);
-        (any, minFee) = _step(g, seat, piece, x, y, -1, 0, any, minFee);
-        (any, minFee) = _step(g, seat, piece, x, y, 0, 1, any, minFee);
-        (any, minFee) = _step(g, seat, piece, x, y, 0, -1, any, minFee);
-        return (any, minFee);
-    }
-
-    function _ray(
-        Game storage g,
-        uint8 seat,
-        uint8 piece,
-        uint8 x,
-        uint8 y,
-        int256 dx,
-        int256 dy,
-        bool any,
-        uint256 minFee
-    ) internal view returns (bool, uint256) {
-        int256 cx = int256(uint256(x));
-        int256 cy = int256(uint256(y));
-        for (uint8 i = 0; i < 10; i++) {
-            cx += dx;
-            cy += dy;
-            if (cx < 0 || cy < 0 || cx > 10 || cy > 10) break;
-            (any, minFee) =
-                _consider(g, seat, piece, x, y, uint8(uint256(cx)), uint8(uint256(cy)), any, minFee);
-        }
-        return (any, minFee);
-    }
-
-    function _step(
-        Game storage g,
-        uint8 seat,
-        uint8 piece,
-        uint8 x,
-        uint8 y,
-        int256 dx,
-        int256 dy,
-        bool any,
-        uint256 minFee
-    ) internal view returns (bool, uint256) {
-        int256 nx = int256(uint256(x)) + dx;
-        int256 ny = int256(uint256(y)) + dy;
-        if (nx < 0 || ny < 0 || nx > 10 || ny > 10) return (any, minFee);
-        return _consider(g, seat, piece, x, y, uint8(uint256(nx)), uint8(uint256(ny)), any, minFee);
-    }
-
-    function _consider(
-        Game storage g,
-        uint8 seat,
-        uint8 piece,
-        uint8 x,
-        uint8 y,
-        uint8 destX,
-        uint8 destY,
-        bool any,
-        uint256 minFee
-    ) internal view returns (bool, uint256) {
-        if (!_isLegal(g, seat, piece, x, y, destX, destY)) return (any, minFee);
-        uint256 fee = FeeLib.moveFee(piece, x, y, destX, destY);
-        if (!any || fee < minFee) return (true, fee);
-        return (any, minFee);
-    }
-
     function _setupInitialBoard(Game storage g) internal {
-        _put(g, 5, 10, 1, 0);
-        _put(g, 4, 10, 2, 0);
-        _put(g, 6, 10, 3, 0);
-        _put(g, 3, 10, 4, 0);
-        _put(g, 7, 10, 5, 0);
-        _put(g, 5, 8, 6, 0);
-        _put(g, 3, 7, 7, 0);
-        _put(g, 5, 7, 7, 0);
-        _put(g, 7, 7, 7, 0);
-        _put(g, 0, 0, 1, 1);
-        _put(g, 1, 0, 2, 1);
-        _put(g, 0, 1, 3, 1);
-        _put(g, 2, 0, 4, 1);
-        _put(g, 0, 2, 5, 1);
-        _put(g, 2, 2, 6, 1);
-        _put(g, 3, 1, 7, 1);
-        _put(g, 3, 3, 7, 1);
-        _put(g, 1, 3, 7, 1);
-        _put(g, 10, 0, 1, 2);
-        _put(g, 9, 0, 2, 2);
-        _put(g, 10, 1, 3, 2);
-        // Horse shifted toward seat 0's advisor so betrayal is a legal short path.
-        _put(g, 6, 9, 4, 2);
-        _put(g, 10, 2, 5, 2);
-        _put(g, 8, 2, 6, 2);
-        _put(g, 7, 1, 7, 2);
-        _put(g, 7, 3, 7, 2);
-        _put(g, 9, 3, 7, 2);
-    }
-
-    function _put(Game storage g, uint8 x, uint8 y, uint8 piece, uint8 seat) internal {
-        g.board[y][x] = _pack(piece, seat);
+        uint16 n = SanrenData.setupCount();
+        for (uint16 i = 0; i < n; i++) {
+            (uint8 node, uint8 piece, uint8 seat) = SanrenData.setupAt(i);
+            g.board[node] = _pack(piece, seat);
+        }
     }
 
     receive() external payable {}

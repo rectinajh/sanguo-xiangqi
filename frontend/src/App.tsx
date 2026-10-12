@@ -41,11 +41,14 @@ import {
   getInjectedWalletClient,
 } from "./lib/chain";
 import { copyText, describeRoom, inviteLinkFor, parseRoomFromUrl, setRoomInUrl } from "./lib/room";
-import { faucetHealth, requestDrip, faucetUrl } from "./lib/faucet";
+import { FAUCET_URL, faucetLabel } from "./lib/faucet";
 import {
   hasAddresses,
   createGame,
   joinGame,
+  abandonGame,
+  claimAbandonRefund,
+  abandonStatusOf,
   commitAndReveal,
   readSeat,
   readMeta,
@@ -95,6 +98,13 @@ function friendlyError(e: unknown): string {
   }
   if (e instanceof Error) return e.message;
   return String(e);
+}
+
+/** 数 3 位位图里有几位是 1（放弃投票占用 bit0..bit2）。 */
+function popcount3(mask: number): number {
+  let n = 0;
+  for (let i = 0; i < 3; i++) if (mask & (1 << i)) n++;
+  return n;
 }
 
 export default function App() {
@@ -160,9 +170,13 @@ export default function App() {
   const [inviteLink, setInviteLink] = useState<string>("");
   const [inviteCopied, setInviteCopied] = useState(false);
   /** 水龙头状态（服务端是否可达 + 剩余可发次数） */
-  const [faucetUp, setFaucetUp] = useState<boolean | null>(null);
-  const [faucetBusy, setFaucetBusy] = useState(false);
   const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 放弃投票状态（合约里每个座要投票，或等超时） */
+  const [abandonInfo, setAbandonInfo] = useState<{
+    votes: number;
+    canForceByTimeout: boolean;
+    claimable: bigint;
+  } | null>(null);
   /** 正在查看战绩的地址；null 表示关闭玩家主页 */
   const [profileAddress, setProfileAddress] = useState<string | null>(null);
   /** 历史面板刷新键：每次终局 +1，让面板不用等轮询就能更新 */
@@ -193,8 +207,6 @@ export default function App() {
   // 探测水龙头服务（仅真实网络需要；本地当然也有，方便自测）
   useEffect(() => {
     (async () => {
-      const h = await faucetHealth();
-      setFaucetUp(h?.ok === true);
     })();
   }, []);
 
@@ -380,6 +392,12 @@ export default function App() {
         if (walletAddress) {
           const bal = await getPublicClient().getBalance({ address: walletAddress });
           setMyBalance(bal);
+          // 大厅/已放弃状态下同步"放弃投票"进度，让按钮文案能显示还差几票
+          try {
+            setAbandonInfo(await abandonStatusOf(id, walletAddress));
+          } catch {
+            setAbandonInfo(null);
+          }
         }
       } catch {
         /* 轮询失败静默重试，不打扰用户 */
@@ -420,21 +438,58 @@ export default function App() {
     }
   }
 
-  /** 领测试币：走服务端水龙头，私钥不在前端。 */
-  async function claimFaucet() {
-    if (!walletAddress) return;
-    setFaucetBusy(true);
+  /**
+   * 领测试币：直接跳官方水龙头，我们不自建。
+   *
+   * 为什么不自己做水龙头：那需要一个常驻的、有 MON 余额的热钱包，还得对公网
+   * 暴露一个发钱接口 —— 运维成本和被刷的风险都不值得，尤其这只是测试网。
+   * 官方水龙头本来就是给这个用的。
+   */
+  function openFaucet() {
+    window.open(FAUCET_URL, "_blank", "noopener,noreferrer");
+    toast("已打开官方水龙头", "领取后回到这里刷新余额即可入座");
+  }
+
+  /**
+   * 放弃卡住的大厅局。合约里每个已入座的人都要投一票（或等超时），
+   * 所以第一次点通常只是投票，钱要等达到条件后再点「取回」。
+   */
+  async function onAbandon() {
+    if (!walletAddress || roomId === null) return;
+    setBusy(true);
     try {
-      const r = await requestDrip(walletAddress);
-      if (!r.ok) throw new Error(r.error);
-      const bal = await getPublicClient().getBalance({ address: walletAddress });
-      setMyBalance(bal);
-      log(`水龙头发放 ${r.amountMon} MON · ${r.hash.slice(0, 12)}…`, true);
-      toast("已到账", `+${r.amountMon} MON，可以入座了`);
+      await abandonGame(walletAddress, roomId);
+      const st = await abandonStatusOf(roomId, walletAddress);
+      setAbandonInfo(st);
+      await refreshRef.current?.(roomId, true);
+      if (st.claimable > 0n) {
+        toast("房间已放弃", "现在可以取回你的钱了");
+      } else {
+        const need = 3 - popcount3(st.votes);
+        toast("已记录你的放弃票", need > 0 ? `还需 ${need} 位已入座者同意，或等大厅超时` : "正在结算…");
+      }
     } catch (e: unknown) {
-      toast("领取失败", friendlyError(e));
+      toast("放弃失败", friendlyError(e));
     } finally {
-      setFaucetBusy(false);
+      setBusy(false);
+    }
+  }
+
+  /** 取回被放弃大厅局里的钱。 */
+  async function onClaimRefund() {
+    if (!walletAddress || roomId === null) return;
+    setBusy(true);
+    try {
+      await claimAbandonRefund(walletAddress, roomId);
+      const bal = walletAddress ? await getPublicClient().getBalance({ address: walletAddress }) : null;
+      if (bal !== null) setMyBalance(bal);
+      setAbandonInfo(await abandonStatusOf(roomId, walletAddress));
+      await refreshRef.current?.(roomId, true);
+      toast("已取回", "质押与作战余额已退回你的钱包");
+    } catch (e: unknown) {
+      toast("取回失败", friendlyError(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -1045,19 +1100,25 @@ export default function App() {
                     <button
                       className="secondary"
                       style={{ padding: "0.35rem 0.7rem", fontSize: "0.78rem" }}
-                      disabled={faucetBusy || !walletAddress}
-                      onClick={claimFaucet}
-                      title={faucetUp === false ? `水龙头不可达（${faucetUrl()}）` : "每个地址可领一次"}
+                      onClick={openFaucet}
+                      title={`打开 ${FAUCET_URL}`}
                     >
-                      {faucetBusy ? "领取中…" : "领测试币"}
+                      去领测试币 ↗
                     </button>
                   </div>
-                  {faucetUp === false && (
-                    <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: -4, marginBottom: 10 }}>
-                      水龙头未启动（{faucetUrl()}）。本地开发跑 <code>pnpm faucet</code>；
-                      公网请配置 <code>VITE_FAUCET_URL</code>。也可以自行去公开水龙头领 MON。
-                    </p>
-                  )}
+                  <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: -4, marginBottom: 10 }}>
+                    {walletAddress ? (
+                      <>
+                        入座需 3 MON（1 质押 + 2 作战）。没币就到{" "}
+                        <a href={FAUCET_URL} target="_blank" rel="noopener noreferrer">
+                          {faucetLabel()}
+                        </a>{" "}
+                        领，回来刷新即可。
+                      </>
+                    ) : (
+                      "连接钱包后可按提示领取测试币。"
+                    )}
+                  </p>
 
                   {/* 房间号 / 邀请链接 */}
                   {roomId !== null ? (
@@ -1117,6 +1178,44 @@ export default function App() {
                             {inviteCopied ? "已复制 ✓" : "复制邀请链接"}
                           </button>
                         </>
+                      )}
+
+                      {/* 卡住的大厅局：放弃 + 取回。
+                          没有这个入口时，"有人建了房但不再来"会让已入座者的
+                          3 MON 永久卡在合约里（finalizeGame 拒绝处理未开打的局）。 */}
+                      {phase === 0 && seats.some((s) => s.address && s.address !== "0x0000000000000000000000000000000000000000") && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                          <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: "0 0 6px" }}>
+                            人凑不齐？
+                            {abandonInfo
+                              ? `已投放弃票 ${popcount3(abandonInfo.votes)} 位` +
+                                (abandonInfo.canForceByTimeout ? " · 大厅已闲置超时，可单独放弃" : "")
+                              : ""}
+                          </p>
+                          <button className="ghost" disabled={busy || !walletAddress} onClick={onAbandon}>
+                            放弃这局并退款
+                          </button>
+                        </div>
+                      )}
+
+                      {(phase === 3 || (abandonInfo?.claimable ?? 0n) > 0n) && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                          <p style={{ fontSize: "0.78rem", color: "var(--gold)", margin: "0 0 6px" }}>
+                            这局已放弃
+                            {abandonInfo && abandonInfo.claimable > 0n
+                              ? ` · 你有 ${formatMon(abandonInfo.claimable)} MON 可取回`
+                              : ""}
+                          </p>
+                          {(abandonInfo?.claimable ?? 0n) > 0n ? (
+                            <button className="primary" disabled={busy || !walletAddress} onClick={onClaimRefund}>
+                              取回 {formatMon(abandonInfo!.claimable)} MON
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                              这一座没有可领取的余额。
+                            </span>
+                          )}
+                        </div>
                       )}
 
                       {/* 入座 */}

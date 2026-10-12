@@ -13,7 +13,6 @@
     "agent": "pnpm --filter @sanguo/shared build && pnpm --filter agent start",
     "agent:dev": "pnpm --filter agent start",
     "typecheck": "tsc --noEmit -p tsconfig.json && cd frontend && tsc -b --force && cd ../agent && tsc --noEmit && cd ../server && tsc --noEmit",
-    "faucet": "pnpm --filter server faucet",
     "test:frontend": "pnpm --filter frontend test",
     "gen:sanren": "tsx scripts/gen-sanren-solidity.ts",
     "test": "pnpm test:shared && pnpm --filter frontend test && pnpm test:forge && pnpm size",

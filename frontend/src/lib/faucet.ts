@@ -1,77 +1,32 @@
 /**
- * faucet.ts —— 前端访问水龙头服务。
+ * faucet.ts —— 领测试币的入口。
  *
- * 私钥在服务端，这里只发一个 HTTP 请求。
- * 水龙头地址通过 VITE_FAUCET_URL 配置；本地默认指向 127.0.0.1:8787。
+ * 我们**不自建水龙头**。自建需要一个常驻的、有 MON 余额的热钱包，还要对公网
+ * 暴露一个发钱接口，运维成本和被刷的风险都不值得 —— 尤其这只是测试网，
+ * 官方水龙头本来就是干这个的。所以这里只负责把用户送到官方入口。
+ *
+ * 如果将来确实要自建（例如内网演示），把 FAUCET_URL 指到自己的服务即可，
+ * 其余调用点不用改。
  */
 
-const FAUCET_URL = (import.meta.env.VITE_FAUCET_URL ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+/** 官方水龙头。改这里就能换成自建水龙头。 */
+export const FAUCET_URL = (import.meta.env.VITE_FAUCET_URL ?? "https://faucet.monad.xyz").replace(
+  /\/$/,
+  ""
+);
 
-export type DripResult =
-  | { ok: true; hash: string; amountMon: string }
-  | { ok: false; error: string };
-
-async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return await Promise.race([
-    p,
-    new Promise<T>((_, rej) => setTimeout(() => rej(new Error("水龙头请求超时")), ms)),
-  ]);
-}
-
-export async function faucetHealth(): Promise<{
-  ok: boolean;
-  chainId: number;
-  balanceMon: string;
-  dripMon: string;
-  dripsLeft: number;
-} | null> {
+/** 水龙头的展示名（按域名推断，避免写死 "Monad" 但实际指向别处）。 */
+export function faucetLabel(): string {
   try {
-    const r = await withTimeout(fetch(`${FAUCET_URL}/health`), 4000);
-    if (!r.ok) return null;
-    return (await r.json()) as {
-      ok: boolean;
-      chainId: number;
-      balanceMon: string;
-      dripMon: string;
-      dripsLeft: number;
-    };
+    const host = new URL(FAUCET_URL).hostname;
+    if (host.includes("monad")) return "Monad 官方水龙头";
+    return host;
   } catch {
-    return null;
+    return "官方水龙头";
   }
 }
 
-export async function requestDrip(address: `0x${string}`): Promise<DripResult> {
-  try {
-    const r = await withTimeout(
-      fetch(`${FAUCET_URL}/drip`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ address }),
-      }),
-      20000
-    );
-    const body = (await r.json()) as {
-      ok?: boolean;
-      hash?: string;
-      amountMon?: string;
-      error?: string;
-    };
-    if (r.ok && body.ok) {
-      return { ok: true, hash: body.hash ?? "", amountMon: body.amountMon ?? "" };
-    }
-    return { ok: false, error: body.error ?? `HTTP ${r.status}` };
-  } catch (e) {
-    const msg = (e as Error).message;
-    return {
-      ok: false,
-      error:
-        msg.includes("超时") || msg.includes("fetch")
-          ? `连不上水龙头（${FAUCET_URL}）。本地开发请先跑 pnpm faucet。`
-          : msg,
-    };
-  }
-}
-
-export function faucetUrl() {
-  return FAUCET_URL;
+/** 是不是官方地址（自建时返回 false，提示文案可以不一样）。 */
+export function isOfficialFaucet(): boolean {
+  return FAUCET_URL.includes("faucet.monad.xyz");
 }

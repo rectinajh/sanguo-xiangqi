@@ -63,9 +63,8 @@ pnpm install
 pnpm test           # shared + 前端 + 合约 + 尺寸检查，全绿
 pnpm anvil          # 终端 A：本地链
 pnpm deploy:local   # 终端 B：部署（幂等，重复跑会复用）
-pnpm faucet         # 终端 C：水龙头，给新地址发 3.2 MON
-pnpm indexer        # 终端 D：索引器（对局历史 / 排行榜）
-pnpm dev            # 终端 E：前端
+pnpm indexer        # 终端 C：索引器（对局历史 / 排行榜）
+pnpm dev            # 终端 D：前端
 ```
 
 打开页面后有三条路径：
@@ -120,16 +119,25 @@ pnpm indexer
 > 所以索引器另用 `CaptureSettled` / `PointsSeized` 事件累计"累计赚分"，
 > 历史统计一律用这个值，而不是 `getSeat` 的当前 points。
 
-### 水龙头
+### 测试币（不自建水龙头）
 
-`server/` 是一个独立进程，用**服务端热钱包**给新用户发 MON。私钥只在服务端：
+**我们用官方水龙头，不自建。** 自建需要一个常驻的、有 MON 余额的热钱包，还要对
+公网暴露发钱接口 —— 运维成本和被刷风险都不值得，何况这只是测试网。
 
-```bash
-FAUCET_KEY=0x... RPC_URL=... CHAIN_ID=10143 pnpm faucet
-```
+官方入口：**<https://faucet.monad.xyz>**
 
-它拒绝在 Monad 主网（143）启动、拒绝使用公开已知的 Anvil 测试钥、
-每个地址限领一次、每个 IP 每日限额，并且只给余额低于阈值的地址发。
+| 项 | 值 |
+|---|---|
+| 网络 | Monad Testnet |
+| Chain ID | `10143` |
+| 代币 | `MON` |
+| RPC | `https://testnet-rpc.monad.xyz` |
+| 浏览器 | [monadvision.com](https://monadvision.com) · [monadscan.com](https://monadscan.com) |
+
+前端余额面板里有「去领测试币 ↗」按钮直接跳转。入座需 3 MON（1 质押 + 2 作战）。
+
+> 本地 Anvil 不需要水龙头：Anvil 自带 10000 ETH 的测试账户。
+> 若确实要换成自建水龙头，把 `VITE_FAUCET_URL` 指向你的服务即可，前端无需改动。
 
 ## Monad 10143
 

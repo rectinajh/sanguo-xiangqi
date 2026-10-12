@@ -165,4 +165,4 @@ export function shortAddr(a: string): string {
   return a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
 }
 
-export const PHASE_LABEL = ["大厅", "行棋中", "已终局"] as const;
+export const PHASE_LABEL = ["大厅", "行棋中", "已终局", "已放弃"] as const;

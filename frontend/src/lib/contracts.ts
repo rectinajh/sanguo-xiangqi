@@ -218,6 +218,60 @@ export async function joinGame(account: Signer, gameId: bigint, seat: number, va
   return hash;
 }
 
+/**
+ * 放弃一个卡住的大厅局，让已入座的人把钱取回去。
+ *
+ * 合约侧有两种放行条件：所有已入座者都投过票，或大厅闲置超过
+ * LOBBY_ABANDON_TIMEOUT。第一次调用只是投票，不一定会立即生效 ——
+ * 调用方应读 abandonStatusOf 判断还差几票。
+ */
+export async function abandonGame(account: Signer, gameId: bigint) {
+  const wallet = getSignerWalletClient();
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "abandonGame",
+    args: [gameId],
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/** 取回被放弃大厅局里的钱。 */
+export async function claimAbandonRefund(account: Signer, gameId: bigint) {
+  const wallet = getSignerWalletClient();
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "claimAbandonRefund",
+    args: [gameId],
+    account,
+    chain: wallet.chain,
+  });
+  const r = await pub.waitForTransactionReceipt({ hash });
+  return { hash, status: r.status };
+}
+
+/** 放弃投票状态：位图、是否可超时强制放弃、我这座能领多少。 */
+export async function abandonStatusOf(
+  gameId: bigint,
+  who: `0x${string}`
+): Promise<{ votes: number; canForceByTimeout: boolean; claimable: bigint }> {
+  const pub = getPublicClient();
+  const [votes, canForceByTimeout, claimable] = (await pub.readContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "abandonStatusOf",
+    args: [gameId],
+    account: who,
+  })) as readonly [number, boolean, bigint];
+  return { votes: Number(votes), canForceByTimeout, claimable };
+}
+
 export async function commitAndReveal(
   account: Signer,
   gameId: bigint,

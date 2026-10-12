@@ -8,7 +8,7 @@ import { formatEther, type Hex, type Abi } from "viem";
 import type { PublicClient } from "viem";
 
 /** 与 GameTable.sol 的 enum Phase 对应 */
-export const PHASE = { Lobby: 0, Playing: 1, Finished: 2 } as const;
+export const PHASE = { Lobby: 0, Playing: 1, Finished: 2, Abandoned: 3 } as const;
 
 export type SeatSnapshot = {
   seat: number;
