@@ -16,6 +16,13 @@
  *   RPC_URL=... pnpm indexer --once   只扫一轮然后退出（适合 CI/定时任务）
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+
+/**
+ * 当前索引的合约地址。合约重新部署后地址会变，而 gameId 从 1 重新开始；
+ * 没有这个过滤时旧部署的行会永远留在榜单上（实测症状：链上座位全空，
+ * 前端却说坐了一个人）。
+ */
+let GAME_TABLE = "";
 import { openStore, type Store } from "./store.js";
 import { createPublicClient, defineChain, http, formatEther, type Abi, type Hex, type PublicClient } from "viem";
 import { readFileSync, mkdirSync, existsSync } from "node:fs";
@@ -214,14 +221,14 @@ async function scanPoints(
 /** 把一个对局快照写库（幂等，重复扫到同一局会覆盖更新）。 */
 async function upsertGame(db: Store, g: GameSnapshot) {
   await db.run(`INSERT INTO games (game_id, phase, turn, ply, ai_revealed, winner_seat, second_seat,
-                        prize_pool, capture_count, protocol_treasury, motive_log_hash, indexed_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                        prize_pool, capture_count, protocol_treasury, motive_log_hash, indexed_at, contract)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(game_id) DO UPDATE SET
        phase=excluded.phase, turn=excluded.turn, ply=excluded.ply,
        ai_revealed=excluded.ai_revealed, winner_seat=excluded.winner_seat,
        second_seat=excluded.second_seat, prize_pool=excluded.prize_pool,
        capture_count=excluded.capture_count, protocol_treasury=excluded.protocol_treasury,
-       motive_log_hash=excluded.motive_log_hash, indexed_at=excluded.indexed_at`, [g.gameId, g.phase, g.turn, g.ply, g.aiRevealed ? 1 : 0, g.winnerSeat, g.secondSeat, g.prizePool.toString(), g.captureCount, g.protocolTreasury.toString(), g.motiveLogHash, Date.now()]);
+       motive_log_hash=excluded.motive_log_hash, indexed_at=excluded.indexed_at`, [g.gameId, g.phase, g.turn, g.ply, g.aiRevealed ? 1 : 0, g.winnerSeat, g.secondSeat, g.prizePool.toString(), g.captureCount, g.protocolTreasury.toString(), g.motiveLogHash, Date.now(), GAME_TABLE]);
 
   for (const s of g.seats) {
     await db.run(
@@ -413,9 +420,9 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
   const p = url.pathname;
 
   if (p === "/health") {
-    const total = await db.get(`SELECT COUNT(*) AS n FROM games`) as { n: number };
-    const finished = (await db.get(`SELECT COUNT(*) AS n FROM games WHERE phase = ?`, [PHASE.Finished])) as { n: number };
-    const players = (await db.get(`SELECT COUNT(DISTINCT player) AS n FROM seats WHERE occupied = TRUE`)) as { n: number };
+    const total = await db.get(`SELECT COUNT(*) AS n FROM games WHERE contract = ?`, [GAME_TABLE]) as { n: number };
+    const finished = (await db.get(`SELECT COUNT(*) AS n FROM games WHERE phase = ? AND contract = ?`, [PHASE.Finished, GAME_TABLE])) as { n: number };
+    const players = (await db.get(`SELECT COUNT(DISTINCT player) AS n FROM seats WHERE occupied = TRUE AND game_id IN (SELECT game_id FROM games WHERE contract = ?)`, [GAME_TABLE])) as { n: number };
     const lastScan = await db.get(`SELECT value FROM meta WHERE key='last_scan'`) as
       | { value: string }
       | undefined;
@@ -448,7 +455,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
     }
     const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const rows = (await db.all(
-      `SELECT g.* FROM games g ${clause} ORDER BY g.game_id DESC LIMIT ? OFFSET ?`,
+      `SELECT g.* FROM games g ${clause}${clause ? " AND" : " WHERE"} g.contract = ? ORDER BY g.game_id DESC LIMIT ? OFFSET ?`,
       [...(args as never[]), limit, offset]
     )) as Record<string, unknown>[];
     send(res, 200, {
@@ -462,7 +469,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
   // GET /games/:id
   const gm = p.match(/^\/games\/(\d+)$/);
   if (gm) {
-    const row = await db.get(`SELECT * FROM games WHERE game_id = ?`, [Number(gm[1])]) as
+    const row = await db.get(`SELECT * FROM games WHERE game_id = ? AND contract = ?`, [Number(gm[1]), GAME_TABLE]) as
       | Record<string, unknown>
       | undefined;
     if (!row) {
@@ -477,7 +484,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
   const pm = p.match(/^\/players\/(0x[0-9a-fA-F]{40})$/);
   if (pm) {
     const who = pm[1].toLowerCase();
-    const played = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND occupied = TRUE`, [who])) as { n: number };
+    const played = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND occupied = TRUE AND game_id IN (SELECT game_id FROM games WHERE contract = ?)`, [who, GAME_TABLE])) as { n: number };
     const won = (await db.get(`SELECT COUNT(*) AS n FROM games g JOIN seats s ON s.game_id = g.game_id AND s.seat = g.winner_seat
          WHERE s.player = ? AND g.phase = ?`, [who, PHASE.Finished])) as { n: number };
     const staked = (await db.get(
@@ -491,7 +498,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
     const points = (await db.get(`SELECT COALESCE(SUM(sp.points_earned),0) AS v FROM seat_points sp
          JOIN seats s ON s.game_id = sp.game_id AND s.seat = sp.seat
          WHERE s.player = ?`, [who])) as { v: number };
-    const slashedTimes = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = TRUE`, [who])) as { n: number };
+    const slashedTimes = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = TRUE AND game_id IN (SELECT game_id FROM games WHERE contract = ?)`, [who, GAME_TABLE])) as { n: number };
     const rep = await db.get(`SELECT * FROM reputation WHERE agent = ?`, [who]) as
       | Record<string, unknown>
       | undefined;
@@ -536,11 +543,11 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
          FROM seats s
          JOIN games g ON g.game_id = s.game_id
          LEFT JOIN seat_points sp ON sp.game_id = s.game_id AND sp.seat = s.seat
-         WHERE s.occupied = TRUE
+         WHERE s.occupied = TRUE AND s.game_id IN (SELECT game_id FROM games WHERE contract = ?)
          GROUP BY s.player
          ORDER BY wins DESC, points DESC
          LIMIT ?`,
-        [PHASE.Finished, limit]
+        [PHASE.Finished, GAME_TABLE, limit]
       )) as Record<string, unknown>[];
     send(res, 200, {
       leaderboard: rows.map((r) => ({
@@ -590,6 +597,7 @@ async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerR
 
 async function main() {
   const cfg = loadConfig();
+  GAME_TABLE = cfg.gameTable.toLowerCase();
   const chain = defineChain({
     id: cfg.chainId,
     name: cfg.chainId === 10143 ? "Monad Testnet" : `chain-${cfg.chainId}`,

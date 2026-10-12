@@ -93,7 +93,14 @@ export class PgStore implements Store {
         capture_count INTEGER NOT NULL,
         protocol_treasury TEXT NOT NULL,
         motive_log_hash TEXT NOT NULL,
-        indexed_at BIGINT NOT NULL
+        indexed_at BIGINT NOT NULL,
+        -- 数据来自哪个合约部署。
+        --
+        -- 为什么必须有：合约每次重新部署地址都会变，而 gameId 从 1 重新开始。
+        -- 没有这一列时，旧部署的行会永远留在榜单上 —— 表现为「链上三个座都是空的，
+        -- 前端却说坐了一个人」（实测踩到）。加上它就能只读当前部署的数据。
+        -- 默认 '' 是为了让老库能平滑迁移。
+        contract TEXT NOT NULL DEFAULT ''
       );
       CREATE TABLE IF NOT EXISTS seats (
         game_id BIGINT NOT NULL,
@@ -131,6 +138,19 @@ export class PgStore implements Store {
         value TEXT NOT NULL
       );
     `);
+
+    // 迁移：老库补 contract 列（幂等）。CREATE TABLE IF NOT EXISTS 不会改已存在的表，
+    // 所以必须显式 ALTER，否则升级后老库读不到这一列。
+    for (const stmt of [
+      `ALTER TABLE games ADD COLUMN IF NOT EXISTS contract TEXT NOT NULL DEFAULT ''`,
+      `CREATE INDEX IF NOT EXISTS idx_games_contract ON games(contract)`,
+    ]) {
+      try {
+        await this.run(stmt);
+      } catch {
+        /* SQLite 不支持 IF NOT EXISTS 的 ALTER；老库由 CREATE TABLE 定义保证 */
+      }
+    }
   }
 
   async all(sql: string, params: unknown[] = []): Promise<Row[]> {
@@ -231,6 +251,19 @@ export class SqliteStore implements Store {
         value TEXT NOT NULL
       );
     `);
+
+    // 迁移：老库补 contract 列（幂等）。CREATE TABLE IF NOT EXISTS 不会改已存在的表，
+    // 所以必须显式 ALTER，否则升级后老库读不到这一列。
+    for (const stmt of [
+      `ALTER TABLE games ADD COLUMN IF NOT EXISTS contract TEXT NOT NULL DEFAULT ''`,
+      `CREATE INDEX IF NOT EXISTS idx_games_contract ON games(contract)`,
+    ]) {
+      try {
+        await this.run(stmt);
+      } catch {
+        /* SQLite 不支持 IF NOT EXISTS 的 ALTER；老库由 CREATE TABLE 定义保证 */
+      }
+    }
   }
 
   async all(sql: string, params: unknown[] = []): Promise<Row[]> {
