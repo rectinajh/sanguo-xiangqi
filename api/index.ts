@@ -254,5 +254,3 @@ async function gameOut(db: Store, row: any, withSeats: boolean) {
     })),
   };
 }
-
-export const config = { runtime: "nodejs" };
