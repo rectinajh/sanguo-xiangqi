@@ -7,11 +7,13 @@ import {
   Piece,
   SEAT_LABEL_ZH,
   Seat,
+  campNode,
   demoSpine,
   formatMon,
   initialBoard,
   legalMoves,
   pickAiMove,
+  SANREN_MAP,
   threatState,
   type LegalMove,
   type ThreatState,
@@ -69,6 +71,7 @@ import {
   readMeta,
   readBoard,
   directorDrain,
+  directorRelocate,
   finalizeGame,
   lockEarnest,
   lockPeaceOffer,
@@ -914,6 +917,11 @@ export default function App() {
           log(`卒 ${formatMon(spine.cheapFee)} MON · 车 ${formatMon(spine.chariotFee)} MON`, true);
         }
         if (m.tag === "betray") {
+          // 隔河后马无法从本营一步到攻士位：导演把绿马挪到剧本起点
+          const horseHome = campNode(SANREN_MAP, 2, 1, 0);
+          await directorRelocate(deployer, id, horseHome, m.from.x);
+          setBoard(await readBoard(id));
+
           // 红营（0）发起、绿营 AI（2）接盟；条款与 bond 进入被签名的 preimage。
           const clauses = [CLAUSE_NO_CAPTURE_ADVISOR, CLAUSE_NO_EXPOSE];
           const bondAmount = BOND_PER_CLAUSE * BigInt(clauses.length);

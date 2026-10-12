@@ -91,6 +91,37 @@ async function main() {
 
   for (const m of spine.moves) {
     if (m.tag === "betray") {
+      // 隔河图：导演把绿马挪到攻士位（与 demoSpine / Covenant harness 一致）。
+      //
+      // ⚠️ 必须幂等：上一次运行如果中途失败，马已经挪过去了；再无条件挪一次会
+      //    撞上 "occ"（目标被占）。这里先读链上状态再决定要不要挪，
+      //    也让脚本可以反复跑而不需要重建链。
+      const target = m.from.x;
+      const at = async (node: number) => {
+        const [piece, seat] = (await pub.readContract({
+          address: table,
+          abi: gameAbi,
+          functionName: "cell",
+          args: [id, node, 0],
+        })) as readonly [number, number];
+        return { piece, seat: seat === 255 ? null : seat };
+      };
+      const dest = await at(target);
+      if (dest.piece !== 0) {
+        console.log(`  (攻士位 ${target} 已有子，跳过挪马)`);
+      } else {
+        // 找绿马当前所在节点（不写死 91：初始布局是 91，但可能已被上次运行挪走）
+        let horseNode: number | null = null;
+        for (let n = 0; n < 139; n++) {
+          const c = await at(n);
+          if (c.piece === 4 && c.seat === 2) {
+            horseNode = n;
+            break;
+          }
+        }
+        if (horseNode === null) throw new Error("找不到绿马，无法把它挪到攻士位");
+        await send(deployer, gameAbi, table, "directorRelocate", [id, horseNode, target]);
+      }
       // 盟约条款与 bond 进入被签名的 preimage（链上会校验 hash 一致）
       const clauses = [1, 2];
       const bondAmount = parseEther("0.15") * BigInt(clauses.length);

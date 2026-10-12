@@ -35,9 +35,9 @@ contract GameTable {
     uint256 public constant MAX_PLIES = 80;
     uint256 public constant DEFEAT_STAKE_SHARE_BPS = 4000;
     uint256 public constant POINT_TO_MON_RATE = 0.001 ether;
-    uint8 public constant NODE_COUNT = 142;
+    uint8 public constant NODE_COUNT = 154;
     /// Legacy names: BOARD_W == NODE_COUNT, BOARD_H == 1 (node board)
-    uint8 public constant BOARD_W = 142;
+    uint8 public constant BOARD_W = 154;
     uint8 public constant BOARD_H = 1;
 
     enum Phase {
@@ -593,6 +593,16 @@ contract GameTable {
             g.seats[seat].playBalance -= amount;
         }
         _checkBankruptcy(g, gameId, seat);
+    }
+
+    /// @dev Demo/director: 挪子（隔河图背刺演示：绿马放到可吃红士的攻位）。
+    function directorRelocate(uint256 gameId, uint8 fromNode, uint8 toNode) external onlyOwner {
+        Game storage g = games[gameId];
+        require(fromNode < NODE_COUNT && toNode < NODE_COUNT, "node");
+        require(g.board[fromNode] != 0, "empty");
+        require(g.board[toNode] == 0, "occ");
+        g.board[toNode] = g.board[fromNode];
+        g.board[fromNode] = 0;
     }
 
     function finalizeGame(uint256 gameId, bytes32 motiveLogHash) external {

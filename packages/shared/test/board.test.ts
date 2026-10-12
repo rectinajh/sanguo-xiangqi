@@ -8,7 +8,7 @@ import { SANREN_MAP } from "../src/sanrenMap";
 import { NODE_COUNT } from "../src/constants";
 
 describe("sanren board", () => {
-  it("has 142 nodes and 48 pieces", () => {
+  it("has NODE_COUNT nodes and 48 pieces", () => {
     expect(SANREN_MAP.nodes.length).toBe(NODE_COUNT);
     const b = initialBoard();
     expect(b.cells.length).toBe(NODE_COUNT);
@@ -38,18 +38,21 @@ describe("sanren board", () => {
     expect(isLegalMove(b, 1, { x: from, y: 0 }, { x: to, y: 0 })).toBe(true);
   });
 
-  it("demo spine contrasts fees then captures an advisor", () => {
+  it("demo spine 在合约真实布局上全程合法", () => {
     const spine = demoSpine();
     expect(spine.cheapFee).toBe(9_000_000_000_000_000n);
     expect(spine.chariotFee).toBeGreaterThan(spine.cheapFee);
-    const betray = spine.moves[spine.moves.length - 1];
-    expect(betray.tag).toBe("betray");
-    expect(betray.piece).toBe(Piece.Horse);
-    let board = demoInitialBoard();
-    for (const m of spine.moves.slice(0, -1)) board = applyMove(board, m.seat, m.from, m.to).board;
-    const forced = pickAiMove(board, { allySeat: 0, activatedPly: 0, forceBetrayal: true });
-    expect(forced?.to).toEqual(betray.to);
-    expect(forced?.capture).toBe(Piece.Advisor);
+    expect(spine.moves[spine.moves.length - 1].tag).toBe("betray");
+
+    // ⚠️ 必须用 initialBoard()（合约 _setupInitialBoard 用的就是这套布局）。
+    //    以前这里用 demoInitialBoard()，把"剧本只在自己的盘面上合法"这个
+    //    不一致掩盖掉了 —— 链上跑 pnpm demo 会在第 6 手报 illegal geom。
+    // 前缀基于合约布局；背刺那一步链上会先挪马，所以只校验到前缀
+    let board = initialBoard();
+    for (const [i, m] of spine.moves.slice(0, -1).entries()) {
+      expect(isLegalMove(board, m.seat, m.from, m.to), `第 ${i} 手 ${m.tag}`).toBe(true);
+      board = applyMove(board, m.seat, m.from, m.to).board;
+    }
   });
 
   it("applyMove advances ply", () => {
