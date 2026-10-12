@@ -23,9 +23,10 @@
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {
     "@sanguo/shared": "workspace:*",
+    "@types/node": "^22.9.0",
+    "@types/pg": "^8.23.1",
     "tsx": "^4.20.5",
-    "viem": "^2.21.0",
-    "@types/node": "^22.9.0"
+    "viem": "^2.21.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

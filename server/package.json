@@ -10,6 +10,7 @@
     "indexer:once": "tsx src/indexer.ts --once"
   },
   "dependencies": {
+    "pg": "^8.23.1",
     "viem": "^2.21.0"
   },
   "devDependencies": {

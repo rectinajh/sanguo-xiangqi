@@ -16,7 +16,7 @@
  *   RPC_URL=... pnpm indexer --once   只扫一轮然后退出（适合 CI/定时任务）
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { DatabaseSync } from "node:sqlite";
+import { openStore, type Store } from "./store.js";
 import { createPublicClient, defineChain, http, formatEther, type Abi, type Hex, type PublicClient } from "viem";
 import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -101,74 +101,6 @@ function loadConfig(): Config {
   };
 }
 
-function openDb(dbPath: string): DatabaseSync {
-  mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new DatabaseSync(dbPath);
-  db.exec(`
-    PRAGMA journal_mode = WAL;
-
-    CREATE TABLE IF NOT EXISTS games (
-      game_id INTEGER PRIMARY KEY,
-      phase INTEGER NOT NULL,
-      turn INTEGER NOT NULL,
-      ply INTEGER NOT NULL,
-      ai_revealed INTEGER NOT NULL,
-      winner_seat INTEGER NOT NULL,
-      second_seat INTEGER NOT NULL,
-      prize_pool TEXT NOT NULL,
-      capture_count INTEGER NOT NULL,
-      protocol_treasury TEXT NOT NULL,
-      motive_log_hash TEXT NOT NULL,
-      indexed_at INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS seats (
-      game_id INTEGER NOT NULL,
-      seat INTEGER NOT NULL,
-      player TEXT NOT NULL,
-      occupied INTEGER NOT NULL,
-      seat_stake TEXT NOT NULL,
-      play_balance TEXT NOT NULL,
-      points INTEGER NOT NULL,
-      eliminated INTEGER NOT NULL,
-      fees_paid TEXT NOT NULL,
-      slashed INTEGER NOT NULL,
-      PRIMARY KEY (game_id, seat)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_seats_player ON seats(player);
-
-    -- 对局结束时合约会把 points 清零（进奖池/孤儿池），所以 seats.points
-    -- 只能反映"当前值"，不能用来做历史统计。points_earned 由吃子事件累计，
-    -- 一旦写入就不会被终局清零，排行榜用它而不是 points。
-    CREATE TABLE IF NOT EXISTS seat_points (
-      game_id INTEGER NOT NULL,
-      seat INTEGER NOT NULL,
-      points_earned INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (game_id, seat)
-    );
-
-    CREATE TABLE IF NOT EXISTS reputation (
-      agent TEXT PRIMARY KEY,
-      games INTEGER NOT NULL,
-      wins INTEGER NOT NULL,
-      slashed INTEGER NOT NULL,
-      betrayal_index INTEGER NOT NULL,
-      trust_score INTEGER NOT NULL,
-      forced_burn TEXT NOT NULL,
-      registered INTEGER NOT NULL,
-      metadata_uri TEXT NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-  return db;
-}
-
 /**
  * 从吃子/夺分事件累计每个座位"曾经赚到"的分数。
  *
@@ -229,7 +161,7 @@ async function getEventsChunked(
 async function scanPoints(
   pub: PublicClient,
   cfg: Config,
-  db: DatabaseSync,
+  db: Store,
   gameAbi: Abi,
   fromBlock: bigint,
   toBlock: bigint
@@ -268,21 +200,20 @@ async function scanPoints(
     bump(Number(a.gameId), Number(a.killer), Number(a.points ?? 0));
   }
 
-  const up = db.prepare(
-    `INSERT INTO seat_points (game_id, seat, points_earned) VALUES (?,?,?)
-     ON CONFLICT(game_id, seat) DO UPDATE SET
-       points_earned = MAX(points_earned, excluded.points_earned)`
-  );
   for (const [k, v] of gained) {
     const [g, seat] = k.split(":");
-    up.run(Number(g), Number(seat), v);
+    await db.run(
+      `INSERT INTO seat_points (game_id, seat, points_earned) VALUES (?,?,?)
+       ON CONFLICT(game_id, seat) DO UPDATE SET
+         points_earned = MAX(points_earned, excluded.points_earned)`,
+      [Number(g), Number(seat), v]
+    );
   }
 }
 
 /** 把一个对局快照写库（幂等，重复扫到同一局会覆盖更新）。 */
-function upsertGame(db: DatabaseSync, g: GameSnapshot) {
-  db.prepare(
-    `INSERT INTO games (game_id, phase, turn, ply, ai_revealed, winner_seat, second_seat,
+async function upsertGame(db: Store, g: GameSnapshot) {
+  await db.run(`INSERT INTO games (game_id, phase, turn, ply, ai_revealed, winner_seat, second_seat,
                         prize_pool, capture_count, protocol_treasury, motive_log_hash, indexed_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(game_id) DO UPDATE SET
@@ -290,33 +221,18 @@ function upsertGame(db: DatabaseSync, g: GameSnapshot) {
        ai_revealed=excluded.ai_revealed, winner_seat=excluded.winner_seat,
        second_seat=excluded.second_seat, prize_pool=excluded.prize_pool,
        capture_count=excluded.capture_count, protocol_treasury=excluded.protocol_treasury,
-       motive_log_hash=excluded.motive_log_hash, indexed_at=excluded.indexed_at`
-  ).run(
-    g.gameId,
-    g.phase,
-    g.turn,
-    g.ply,
-    g.aiRevealed ? 1 : 0,
-    g.winnerSeat,
-    g.secondSeat,
-    g.prizePool.toString(),
-    g.captureCount,
-    g.protocolTreasury.toString(),
-    g.motiveLogHash,
-    Date.now()
-  );
+       motive_log_hash=excluded.motive_log_hash, indexed_at=excluded.indexed_at`, [g.gameId, g.phase, g.turn, g.ply, g.aiRevealed ? 1 : 0, g.winnerSeat, g.secondSeat, g.prizePool.toString(), g.captureCount, g.protocolTreasury.toString(), g.motiveLogHash, Date.now()]);
 
-  const seatStmt = db.prepare(
-    `INSERT INTO seats (game_id, seat, player, occupied, seat_stake, play_balance, points,
+  for (const s of g.seats) {
+    await db.run(
+      `INSERT INTO seats (game_id, seat, player, occupied, seat_stake, play_balance, points,
                         eliminated, fees_paid, slashed)
      VALUES (?,?,?,?,?,?,?,?,?,?)
      ON CONFLICT(game_id, seat) DO UPDATE SET
        player=excluded.player, occupied=excluded.occupied, seat_stake=excluded.seat_stake,
        play_balance=excluded.play_balance, points=excluded.points,
-       eliminated=excluded.eliminated, fees_paid=excluded.fees_paid, slashed=excluded.slashed`
-  );
-  for (const s of g.seats) {
-    seatStmt.run(
+       eliminated=excluded.eliminated, fees_paid=excluded.fees_paid, slashed=excluded.slashed`,
+      [
       g.gameId,
       s.seat,
       s.player.toLowerCase(),
@@ -326,7 +242,8 @@ function upsertGame(db: DatabaseSync, g: GameSnapshot) {
       s.points,
       s.eliminated ? 1 : 0,
       s.feesPaid.toString(),
-      s.slashed ? 1 : 0
+      s.slashed ? 1 : 0,
+      ]
     );
   }
 }
@@ -334,7 +251,7 @@ function upsertGame(db: DatabaseSync, g: GameSnapshot) {
 async function scanOnce(
   pub: PublicClient,
   cfg: Config,
-  db: DatabaseSync
+  db: Store
 ): Promise<{ scanned: number; updated: number; nextGameId: number }> {
   const gameAbi = loadAbi("GameTable");
   const regAbi = loadAbi("AgentRegistry");
@@ -366,34 +283,21 @@ async function scanOnce(
     try {
       const rep = await readReputation(pub, cfg.registry, regAbi, who as Hex);
       if (!rep.registered) continue;
-      db.prepare(
-        `INSERT INTO reputation (agent, games, wins, slashed, betrayal_index, trust_score,
+      await db.run(`INSERT INTO reputation (agent, games, wins, slashed, betrayal_index, trust_score,
                                  forced_burn, registered, metadata_uri, updated_at)
          VALUES (?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(agent) DO UPDATE SET
            games=excluded.games, wins=excluded.wins, slashed=excluded.slashed,
            betrayal_index=excluded.betrayal_index, trust_score=excluded.trust_score,
            forced_burn=excluded.forced_burn, registered=excluded.registered,
-           metadata_uri=excluded.metadata_uri, updated_at=excluded.updated_at`
-      ).run(
-        who,
-        rep.games,
-        rep.wins,
-        rep.slashed,
-        rep.betrayalIndex,
-        rep.trustScore,
-        rep.forcedBurnMonTotal.toString(),
-        rep.registered ? 1 : 0,
-        rep.metadataURI,
-        Date.now()
-      );
+           metadata_uri=excluded.metadata_uri, updated_at=excluded.updated_at`, [who, rep.games, rep.wins, rep.slashed, rep.betrayalIndex, rep.trustScore, rep.forcedBurnMonTotal.toString(), rep.registered ? 1 : 0, rep.metadataURI, Date.now()]);
     } catch {
       /* 单条声誉失败不影响整轮 */
     }
   }
 
   // 事件累计：用 meta 记录已扫块高，只扫增量
-  const fromRow = db.prepare(`SELECT value FROM meta WHERE key='points_scanned_block'`).get() as
+  const fromRow = await db.get(`SELECT value FROM meta WHERE key='points_scanned_block'`) as
     | { value: string }
     | undefined;
   const latest = await pub.getBlockNumber();
@@ -407,16 +311,12 @@ async function scanOnce(
   const fromBlock = fromRow ? BigInt(fromRow.value) + 1n : firstStart;
   if (fromBlock <= latest) {
     await scanPoints(pub, cfg, db, gameAbi, fromBlock, latest);
-    db.prepare(
-      `INSERT INTO meta (key, value) VALUES ('points_scanned_block', ?)
-       ON CONFLICT(key) DO UPDATE SET value=excluded.value`
-    ).run(String(latest));
+    await db.run(`INSERT INTO meta (key, value) VALUES ('points_scanned_block', ?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [String(latest)]);
   }
 
-  db.prepare(
-    `INSERT INTO meta (key, value) VALUES ('last_scan', ?)
-     ON CONFLICT(key) DO UPDATE SET value=excluded.value`
-  ).run(String(Date.now()));
+  await db.run(`INSERT INTO meta (key, value) VALUES ('last_scan', ?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value`, [String(Date.now())]);
 
   return { scanned: nextGameId - from, updated, nextGameId };
 }
@@ -424,6 +324,10 @@ async function scanOnce(
 // ── HTTP 接口 ────────────────────────────────────────────────
 
 function send(res: ServerResponse, status: number, body: unknown, origin = "*") {
+  // 幂等：handler 内部抛错时，catch 分支会再调一次 send —— 若已经发过响应头，
+  // 第二次 writeHead 会抛 ERR_HTTP_HEADERS_SENT 并**直接杀掉整个索引器进程**
+  // （实测踩过：一次 /health 请求就能让服务退出）。这里直接跳过第二次。
+  if (res.headersSent || res.writableEnded) return;
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "access-control-allow-origin": origin,
@@ -431,22 +335,21 @@ function send(res: ServerResponse, status: number, body: unknown, origin = "*") 
     "access-control-allow-methods": "GET,OPTIONS",
     "cache-control": "no-store",
   });
-  res.end(JSON.stringify(body));
+  // BigInt 序列化：
+  // SQLite 后端为了安全读取 wei 金额，对所有整数列开了 setReadBigInts，
+  // 于是连 COUNT(*) 也是 BigInt —— 而 JSON.stringify(BigInt) 会**直接抛错**
+  // （"Do not know how to serialize a BigInt"），表现为 /health 返回空、
+  // /games 里只剩 {}。这里统一转换：能放进 number 的转 number，否则转字符串。
+  res.end(
+    JSON.stringify(body, (_k, v) => {
+      if (typeof v !== "bigint") return v;
+      return v >= BigInt(Number.MIN_SAFE_INTEGER) && v <= BigInt(Number.MAX_SAFE_INTEGER)
+        ? Number(v)
+        : v.toString();
+    })
+  );
 }
 
-/**
- * node:sqlite 默认把整数读成 JS number，一旦超过安全整数范围就**直接抛错**
- * （Value is too large to be represented as a JavaScript number）。
- * 我们的金额是 wei（18 位小数），必然超范围 —— 实测 leaderboard 的
- * SUM(fees_paid) 就是这么炸的。
- *
- * 解法是让 driver 用 BigInt 读取：statement.setReadBigInts(true)。
- * 下面这个 helper 统一包一层，避免每处查询都忘记设置。
- */
-function withBigInts<T extends { setReadBigInts?: (v: boolean) => void }>(stmt: T): T {
-  stmt.setReadBigInts?.(true);
-  return stmt;
-}
 
 /** 兜底转换：值可能来自 BigInt 模式，也可能来自普通模式。 */
 function toBig(v: unknown): bigint {
@@ -475,7 +378,7 @@ const seatOut = (r: Record<string, unknown>) => ({
   slashed: Boolean(r.slashed),
 });
 
-function gameOut(db: DatabaseSync, row: Record<string, unknown>, withSeats: boolean) {
+async function gameOut(db: Store, row: Record<string, unknown>, withSeats: boolean) {
   const g = {
     gameId: Number(row.game_id),
     phase: Number(row.phase),
@@ -491,29 +394,24 @@ function gameOut(db: DatabaseSync, row: Record<string, unknown>, withSeats: bool
     indexedAt: Number(row.indexed_at),
   };
   if (!withSeats) return g;
-  const seats = db
-    .prepare(
-      `SELECT s.*, COALESCE(sp.points_earned, 0) AS points_earned
+  const seats = (await db.all(
+    `SELECT s.*, COALESCE(sp.points_earned, 0) AS points_earned
        FROM seats s
        LEFT JOIN seat_points sp ON sp.game_id = s.game_id AND sp.seat = s.seat
-       WHERE s.game_id = ? ORDER BY s.seat`
-    )
-    .all(g.gameId) as Record<string, unknown>[];
+       WHERE s.game_id = ? ORDER BY s.seat`,
+    [g.gameId]
+  )) as Record<string, unknown>[];
   return { ...g, seats: seats.map(seatOut) };
 }
 
-async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: ServerResponse) {
+async function handleApi(db: Store, url: URL, req: IncomingMessage, res: ServerResponse) {
   const p = url.pathname;
 
   if (p === "/health") {
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM games`).get() as { n: number };
-    const finished = db
-      .prepare(`SELECT COUNT(*) AS n FROM games WHERE phase = ?`)
-      .get(PHASE.Finished) as { n: number };
-    const players = db
-      .prepare(`SELECT COUNT(DISTINCT player) AS n FROM seats WHERE occupied = 1`)
-      .get() as { n: number };
-    const lastScan = db.prepare(`SELECT value FROM meta WHERE key='last_scan'`).get() as
+    const total = await db.get(`SELECT COUNT(*) AS n FROM games`) as { n: number };
+    const finished = (await db.get(`SELECT COUNT(*) AS n FROM games WHERE phase = ?`, [PHASE.Finished])) as { n: number };
+    const players = (await db.get(`SELECT COUNT(DISTINCT player) AS n FROM seats WHERE occupied = 1`)) as { n: number };
+    const lastScan = await db.get(`SELECT value FROM meta WHERE key='last_scan'`) as
       | { value: string }
       | undefined;
     send(res, 200, {
@@ -544,24 +442,29 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
       args.push(player);
     }
     const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-    const rows = db
-      .prepare(`SELECT g.* FROM games g ${clause} ORDER BY g.game_id DESC LIMIT ? OFFSET ?`)
-      .all(...(args as never[]), limit, offset) as Record<string, unknown>[];
-    send(res, 200, { games: rows.map((r) => gameOut(db, r, true)), limit, offset });
+    const rows = (await db.all(
+      `SELECT g.* FROM games g ${clause} ORDER BY g.game_id DESC LIMIT ? OFFSET ?`,
+      [...(args as never[]), limit, offset]
+    )) as Record<string, unknown>[];
+    send(res, 200, {
+      games: await Promise.all(rows.map((r) => gameOut(db, r, true))),
+      limit,
+      offset,
+    });
     return;
   }
 
   // GET /games/:id
   const gm = p.match(/^\/games\/(\d+)$/);
   if (gm) {
-    const row = db.prepare(`SELECT * FROM games WHERE game_id = ?`).get(Number(gm[1])) as
+    const row = await db.get(`SELECT * FROM games WHERE game_id = ?`, [Number(gm[1])]) as
       | Record<string, unknown>
       | undefined;
     if (!row) {
       send(res, 404, { error: "game not indexed" });
       return;
     }
-    send(res, 200, gameOut(db, row, true));
+    send(res, 200, await gameOut(db, row, true));
     return;
   }
 
@@ -569,40 +472,26 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
   const pm = p.match(/^\/players\/(0x[0-9a-fA-F]{40})$/);
   if (pm) {
     const who = pm[1].toLowerCase();
-    const played = db
-      .prepare(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND occupied = 1`)
-      .get(who) as { n: number };
-    const won = db
-      .prepare(
-        `SELECT COUNT(*) AS n FROM games g JOIN seats s ON s.game_id = g.game_id AND s.seat = g.winner_seat
-         WHERE s.player = ? AND g.phase = ?`
-      )
-      .get(who, PHASE.Finished) as { n: number };
-    const staked = withBigInts(
-      db.prepare(`SELECT COALESCE(SUM(CAST(seat_stake AS INTEGER)),0) AS v FROM seats WHERE player = ?`)
-    ).get(who) as { v: unknown };
-    const fees = withBigInts(
-      db.prepare(`SELECT COALESCE(SUM(CAST(fees_paid AS INTEGER)),0) AS v FROM seats WHERE player = ?`)
-    ).get(who) as { v: unknown };
-    const points = db
-      .prepare(
-        `SELECT COALESCE(SUM(sp.points_earned),0) AS v FROM seat_points sp
+    const played = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND occupied = 1`, [who])) as { n: number };
+    const won = (await db.get(`SELECT COUNT(*) AS n FROM games g JOIN seats s ON s.game_id = g.game_id AND s.seat = g.winner_seat
+         WHERE s.player = ? AND g.phase = ?`, [who, PHASE.Finished])) as { n: number };
+    const staked = (await db.get(
+      `SELECT COALESCE(SUM(CAST(seat_stake AS INTEGER)),0) AS v FROM seats WHERE player = ?`,
+      [who]
+    )) as { v: unknown };
+    const fees = (await db.get(
+      `SELECT COALESCE(SUM(CAST(fees_paid AS INTEGER)),0) AS v FROM seats WHERE player = ?`,
+      [who]
+    )) as { v: unknown };
+    const points = (await db.get(`SELECT COALESCE(SUM(sp.points_earned),0) AS v FROM seat_points sp
          JOIN seats s ON s.game_id = sp.game_id AND s.seat = sp.seat
-         WHERE s.player = ?`
-      )
-      .get(who) as { v: number };
-    const slashedTimes = db
-      .prepare(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = 1`)
-      .get(who) as { n: number };
-    const rep = db.prepare(`SELECT * FROM reputation WHERE agent = ?`).get(who) as
+         WHERE s.player = ?`, [who])) as { v: number };
+    const slashedTimes = (await db.get(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = 1`, [who])) as { n: number };
+    const rep = await db.get(`SELECT * FROM reputation WHERE agent = ?`, [who]) as
       | Record<string, unknown>
       | undefined;
-    const recent = db
-      .prepare(
-        `SELECT g.* FROM games g JOIN seats s ON s.game_id = g.game_id
-         WHERE s.player = ? ORDER BY g.game_id DESC LIMIT 10`
-      )
-      .all(who) as Record<string, unknown>[];
+    const recent = (await db.all(`SELECT g.* FROM games g JOIN seats s ON s.game_id = g.game_id
+         WHERE s.player = ? ORDER BY g.game_id DESC LIMIT 10`, [who])) as Record<string, unknown>[];
 
     send(res, 200, {
       address: who,
@@ -624,7 +513,7 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
             metadataURI: rep.metadata_uri,
           }
         : null,
-      recentGames: recent.map((r) => gameOut(db, r, false)),
+      recentGames: await Promise.all(recent.map((r) => gameOut(db, r, false))),
     });
     return;
   }
@@ -632,8 +521,7 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
   // GET /leaderboard?limit=
   if (p === "/leaderboard") {
     const limit = Math.min(Number(url.searchParams.get("limit") ?? 10), 100);
-    const rows = withBigInts(
-      db.prepare(
+    const rows = (await db.all(
         `SELECT s.player,
                 COUNT(*) AS games,
                 SUM(CASE WHEN g.winner_seat = s.seat AND g.phase = ? THEN 1 ELSE 0 END) AS wins,
@@ -646,9 +534,9 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
          WHERE s.occupied = 1
          GROUP BY s.player
          ORDER BY wins DESC, points DESC
-         LIMIT ?`
-      )
-    ).all(PHASE.Finished, limit) as Record<string, unknown>[];
+         LIMIT ?`,
+        [PHASE.Finished, limit]
+      )) as Record<string, unknown>[];
     send(res, 200, {
       leaderboard: rows.map((r) => ({
         player: r.player,
@@ -667,7 +555,7 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
 
   // GET /agents —— 已注册的 AI 身份与声誉
   if (p === "/agents") {
-    const rows = db.prepare(`SELECT * FROM reputation ORDER BY updated_at DESC`).all() as Record<
+    const rows = await db.all(`SELECT * FROM reputation ORDER BY updated_at DESC`) as Record<
       string,
       unknown
     >[];
@@ -710,11 +598,14 @@ async function main() {
     throw new Error(`RPC 实际 chainId 是 ${actual}，与配置的 ${cfg.chainId} 不一致，拒绝启动。`);
   }
 
-  const db = openDb(cfg.dbPath);
+  const db = await openStore({
+    databaseUrl: process.env.DATABASE_URL,
+    dbPath: cfg.dbPath,
+  });
   console.log("索引器启动");
   console.log(`  链        ${cfg.chainId} · ${cfg.rpcUrl}`);
   console.log(`  GameTable ${cfg.gameTable}`);
-  console.log(`  数据库    ${cfg.dbPath}`);
+  console.log(`  数据库    ${db.kind}${db.kind === "sqlite" ? ` · ${cfg.dbPath}` : ""}`);
   console.log(`  间隔      ${cfg.intervalMs}ms${cfg.once ? "（--once 模式）" : ""}`);
 
   if (cfg.once) {
