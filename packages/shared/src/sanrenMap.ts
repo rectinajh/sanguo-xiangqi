@@ -63,7 +63,13 @@ export const GEOM = {
    * 每营横向收缩系数（相对标准 f0–f8 全宽）。
    * <1 会在邻营之间留出「河」缝，避免卒线外角贴死/叠子。
    */
-  fileScale: 0.72,
+  /** 略放宽横向间距，棋子不易挤在一起；仍保留营间河缝 */
+  fileScale: 0.78,
+  /**
+   * 边线额外内收（相对 |f-4|/4 的二次权重）。
+   * 防止邻营 f0↔f8 的 r3→r4 线段在河缝交叉成 X。
+   */
+  edgeTaper: 0.22,
 };
 
 const SQ3 = Math.sqrt(3);
@@ -108,8 +114,10 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
   const cz = (name: string) => byKey.get(`z:${name}`)!;
 
   const localPoint = (f: number, r: number): [number, number] => {
-    // 横向收窄：三营之间留河缝；不再用外角共点几何（pCorner）
-    const x = (f - 4) * g.fileScale;
+    // 横向收窄 + 边线再内收：河缝不交叉；中路仍保持可读间距
+    const edge = Math.abs(f - 4) / 4;
+    const taper = g.edgeTaper ?? 0;
+    const x = (f - 4) * g.fileScale * (1 - taper * edge * edge);
     return [x, arcY(x, r)];
   };
 
@@ -182,11 +190,34 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
       for (let r = 0; r <= 4; r++) ids.push(cn(c, f, r));
       for (let i = 0; i < ids.length - 1; i++) seg(ids[i], ids[i + 1]);
       if (f === 4) {
+        // 中路过河：r4 → 门 → 内点 → 中宫
         const ext = [cz(`G${c}`), cz(`X${c}`), cz("C")];
         seg(ids[ids.length - 1], ext[0]);
         seg(ext[0], ext[1]);
         seg(ext[1], ext[2]);
         ids.push(...ext);
+      } else if (f === 2) {
+        // 左辅路：r4 → 左须 → 门
+        const wl = cz(`WL${c}`);
+        const g = cz(`G${c}`);
+        seg(ids[ids.length - 1], wl);
+        ids.push(wl, g);
+      } else if (f === 6) {
+        // 右辅路：r4 → 右须 → 门
+        const wr = cz(`WR${c}`);
+        const g = cz(`G${c}`);
+        seg(ids[ids.length - 1], wr);
+        ids.push(wr, g);
+      } else if (f === 0) {
+        // 左边兵直进中宫：r4 → 角点 K（不过河不能横走）
+        const k = cz(`K${c}`);
+        seg(ids[ids.length - 1], k);
+        ids.push(k);
+      } else if (f === 8) {
+        // 右边兵直进中宫：r4 → 邻营角点（本营侧弧右端）
+        const k = cz(`K${nx}`);
+        seg(ids[ids.length - 1], k);
+        ids.push(k);
       }
       // 边线文件也记入纵线，便于车炮沿线计步
       lines.push({ name: `${c}:f${f}`, nodes: ids });
@@ -209,6 +240,11 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
     const gl = [cz(`G${c}`), cz(`I${c}`), cz(`G${p}`)];
     seg(gl[0], gl[1]); seg(gl[1], gl[2]);
     lines.push({ name: `z:gate${c}`, nodes: gl });
+
+    // 边兵进角后的向心干道：角 → 内点（不挤辅路门须，避免撞车）
+    const spoke = [cz(`K${c}`), cz(`I${c}`)];
+    seg(spoke[0], spoke[1]);
+    lines.push({ name: `z:spoke${c}`, nodes: spoke });
   }
 
   // Inner arc of sector c runs I(next) -> X(c) -> I(c); whiskers continue it straight through the inner circles.

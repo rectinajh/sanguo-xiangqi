@@ -172,6 +172,20 @@ button.danger {
   height: auto;
   user-select: none;
 }
+.sanren-hint {
+  margin: 0;
+  padding: 10px 14px 14px;
+  text-align: center;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #6a3a48;
+  background: #f7f4ef;
+  border-top: 1px solid rgba(207, 58, 114, 0.18);
+}
+.sanren-hint strong {
+  color: #b01848;
+  font-weight: 700;
+}
 
 .fee-tip {
   position: absolute;

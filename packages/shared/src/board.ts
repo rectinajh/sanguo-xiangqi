@@ -111,22 +111,30 @@ function soldierOk(b: BoardState, seat: Seat, from: number, to: number): boolean
   const fromCamp = nodeCamp(SANREN_MAP, from);
   const toCamp = nodeCamp(SANREN_MAP, to);
 
-  // Own camp: only forward along file toward center (increasing r)
+  // Own camp: 只能沿纵线朝中心前进，过河前不能横走。
+  // 过河五口：f0→角、f2→左须、f4→门、f6→右须、f8→角。
   if (fromCamp === seat) {
     const a = localFr(SANREN_MAP, from, seat);
     const c = localFr(SANREN_MAP, to, seat);
     if (a && c && a.f === c.f && c.r === a.r + 1) return true;
-    // Leaving toward citadel via f4 r4 → gate
-    if (a && a.f === 4 && a.r === 4 && to === G.gate[seat]) return true;
+    // 从河沿线一步踏进中宫图（门 / 须 / 角），已由 adjacency 约束
+    if (a && a.r === 4 && toCamp === CITADEL) return true;
     return false;
   }
 
-  // Citadel: forward = increase dist from own gate; sideways = same dist
+  // Citadel: 远离本营门 / 同距横移；或向心（边兵进角后 K→I→X→C，不走辅路撞车）
   if (fromCamp === CITADEL || toCamp === CITADEL) {
     const d0 = bfsDist(G.adj, G.gate[seat], from);
     const d1 = bfsDist(G.adj, G.gate[seat], to);
     if (d0 < 0 || d1 < 0) return false;
-    return d1 > d0 || d1 === d0; // forward or sideways, never closer to gate (= backward)
+    if (d1 > d0 || d1 === d0) return true;
+    const center = SANREN_MAP.nodes.find((n) => n.kind === "center");
+    if (!center) return false;
+    const a = SANREN_MAP.nodes[from];
+    const b = SANREN_MAP.nodes[to];
+    const r0 = (a.x - center.x) ** 2 + (a.y - center.y) ** 2;
+    const r1 = (b.x - center.x) ** 2 + (b.y - center.y) ** 2;
+    return r1 + 1e-9 < r0;
   }
 
   // Foreign camp: forward toward that camp's back (decreasing r); sideways same r

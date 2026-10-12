@@ -5,7 +5,6 @@ import {
   fetchGames,
   fetchLeaderboard,
   indexerHealth,
-  indexerUrl,
   shortAddr,
   weiToMon,
   type IndexedGame,
@@ -28,9 +27,7 @@ const winnerText = (g: IndexedGame) =>
 
 /**
  * 对局历史 + 排行榜。
- *
- * 数据来自链下索引器（server/src/indexer.ts），因为合约本身没有"列表"能力。
- * 索引器不可用时面板要优雅降级（给出启动命令），而不是报错或空白。
+ * 数据来自索引服务；不可用时静默空态，不向玩家暴露技术细节。
  */
 export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props) {
   const [tab, setTab] = useState<Tab>("games");
@@ -46,6 +43,9 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
     const health = await indexerHealth();
     setUp(health !== null);
     if (health === null) {
+      setGames(null);
+      setBoard(null);
+      setOpenTables(null);
       setLoading(false);
       return;
     }
@@ -70,7 +70,6 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
     void load();
   }, [load, refreshKey]);
 
-  // 索引器在后台扫描，面板每 10 秒自己刷新一次
   useEffect(() => {
     const t = setInterval(() => void load(), 10_000);
     return () => clearInterval(t);
@@ -78,20 +77,10 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
 
   return (
     <div className="panel">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <h2 style={{ margin: 0 }}>链下索引</h2>
-        <span style={{ fontSize: "0.7rem", color: "var(--muted)" }}>
-          {up === null ? "探测中…" : up ? "索引器在线" : "索引器离线"}
-        </span>
-      </div>
+      <h2 style={{ margin: 0 }}>对局</h2>
 
       {up === false && (
-        <p style={{ fontSize: "0.75rem", color: "var(--muted)", marginTop: 6 }}>
-          对局历史与排行榜来自链下索引服务，当前连不上（{indexerUrl()}）。
-          <br />
-          不影响玩游戏：建房、入座、走子、 Covenant 与背刺罚没全部照常工作，
-          只是看不到历史列表。
-        </p>
+        <p style={{ fontSize: "0.78rem", color: "var(--muted)", marginTop: 8 }}>暂无记录</p>
       )}
 
       {up && (
@@ -132,9 +121,7 @@ export function HistoryPanel({ refreshKey = 0, onPickGame, onOpenPlayer }: Props
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {games === null && <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>读取中…</p>}
               {games?.length === 0 && (
-                <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
-                  还没有已索引的对局。开一局并跑完，索引器扫描后就会出现在这里。
-                </p>
+                <p style={{ fontSize: "0.78rem", color: "var(--muted)" }}>还没有对局记录。</p>
               )}
               {games?.map((g) => (
                 <button

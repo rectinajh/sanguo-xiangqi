@@ -95,7 +95,9 @@ library SanrenRules {
             int16 f1 = SanrenData.localF(seat, toNode);
             int16 r1 = SanrenData.localR(seat, toNode);
             if (f0 >= 0 && f1 >= 0 && f0 == f1 && r1 == r0 + 1) return true;
-            if (f0 == 4 && r0 == 4 && toNode == SanrenData.gateOf(seat)) return true;
+            // 过河前不能横走。五口过河：f0/f8→角、f2→左须、f4→门、f6→右须
+            uint8 toCamp = SanrenData.nodeCampOf(toNode);
+            if (r0 == 4 && toCamp == SanrenData.CAMP_NONE) return true;
             return false;
         }
         // After leaving own camp: any adjacent step (slightly looser than TS citadel BFS)
