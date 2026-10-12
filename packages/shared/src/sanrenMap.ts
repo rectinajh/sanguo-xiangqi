@@ -63,13 +63,13 @@ export const GEOM = {
    * 每营横向收缩系数（相对标准 f0–f8 全宽）。
    * <1 会在邻营之间留出「河」缝，避免卒线外角贴死/叠子。
    */
-  /** 略放宽横向间距，棋子不易挤在一起；仍保留营间河缝 */
-  fileScale: 0.78,
+  /** 横向间距：底线车马要能并排放下（直径约 0.56） */
+  fileScale: 0.85,
   /**
-   * 边线额外内收（相对 |f-4|/4 的二次权重）。
-   * 防止邻营 f0↔f8 的 r3→r4 线段在河缝交叉成 X。
+   * 边线额外内收（相对 |f-4|/4 的二次权重），并按 rank 加权：
+   * 底线(r0)不收，河沿(r4)全收，避免河角交叉又不挤车马。
    */
-  edgeTaper: 0.22,
+  edgeTaper: 0.18,
 };
 
 const SQ3 = Math.sqrt(3);
@@ -114,10 +114,11 @@ export function buildSanrenMap(g = GEOM): SanrenMap {
   const cz = (name: string) => byKey.get(`z:${name}`)!;
 
   const localPoint = (f: number, r: number): [number, number] => {
-    // 横向收窄 + 边线再内收：河缝不交叉；中路仍保持可读间距
+    // 横向收窄；边线内收随 rank 加重（底线松开车马，河沿防交叉）
     const edge = Math.abs(f - 4) / 4;
     const taper = g.edgeTaper ?? 0;
-    const x = (f - 4) * g.fileScale * (1 - taper * edge * edge);
+    const rankW = r / 4; // r0=0 … r4=1
+    const x = (f - 4) * g.fileScale * (1 - taper * edge * edge * rankW);
     return [x, arcY(x, r)];
   };
 

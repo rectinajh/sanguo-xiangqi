@@ -8,7 +8,7 @@ const GUIDE = "#c44a6e";
 const PAPER = "#f7f4ef";
 const LABEL = "#d4416f";
 const SEAT_INK = ["#c22a2f", "#1e2422", "#1f8a4c"];
-const PIECE_R = 0.28 * U;
+const PIECE_R = 0.26 * U;
 const RING_R = 0.14 * U;
 const FACE = "Kaiti SC, STKaiti, KaiTi, Songti SC, Noto Serif SC, serif";
 /** 三路过河入口（辅路 / 中路） */
