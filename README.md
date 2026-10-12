@@ -60,11 +60,12 @@ Three-player Xiangqi with one staked AI mole — every move is a transaction tha
 
 ```bash
 pnpm install
-pnpm test           # shared + 前端 + 合约，全绿
+pnpm test           # shared + 前端 + 合约 + 尺寸检查，全绿
 pnpm anvil          # 终端 A：本地链
 pnpm deploy:local   # 终端 B：部署（幂等，重复跑会复用）
 pnpm faucet         # 终端 C：水龙头，给新地址发 3.2 MON
-pnpm dev            # 终端 D：前端
+pnpm indexer        # 终端 D：索引器（对局历史 / 排行榜）
+pnpm dev            # 终端 E：前端
 ```
 
 打开页面后有三条路径：
@@ -82,6 +83,25 @@ pnpm dev            # 终端 D：前端
 
 房间号就是链上 `gameId`，对局的唯一真源是合约 —— **不需要房间服务器**。
 邀请链接形如 `http://localhost:5173/#/r/12`，朋友点开即自动进入该房间并看到谁已入座。
+
+### 索引器（对局历史 / 排行榜）
+
+合约本身没有"列表"能力：`AgentRegistry` 的声誉只能按地址查，既没有 `agentCount`，
+也没有"所有对局"。所以历史与排行榜由链下索引器提供，链仍是唯一真源（索引可重建）：
+
+```bash
+pnpm indexer          # 持续运行，默认 http://127.0.0.1:8788
+pnpm indexer:once     # 只扫一轮后退出（适合 CI / 定时任务）
+```
+
+接口：`/health` · `/games` · `/games/:id` · `/players/:address` · `/leaderboard` · `/agents`
+
+用 `node:sqlite`（Node 22+ 内置，零额外依赖），数据落在 `server/.data/index.sqlite`，
+删掉即可重建。前端面板通过 `VITE_INDEXER_URL` 指向它。
+
+> 注意：合约在终局结算时会把 `points` 用掉（进奖池/孤儿池），结算后链上读到的是 0。
+> 所以索引器另用 `CaptureSettled` / `PointsSeized` 事件累计"累计赚分"，
+> 历史统计一律用这个值，而不是 `getSeat` 的当前 points。
 
 ### 水龙头
 

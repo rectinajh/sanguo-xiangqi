@@ -16,6 +16,7 @@ import {
 import { keccak256, encodePacked, parseEther, type Hex, type Account } from "viem";
 import { Board } from "./components/Board";
 import { ScorePanel, type SeatView } from "./components/ScorePanel";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { AllianceModal } from "./components/AllianceModal";
 import { EndgameReveal } from "./components/EndgameReveal";
 import { ToastHost, type ToastItem } from "./components/Toast";
@@ -161,6 +162,8 @@ export default function App() {
   const [faucetUp, setFaucetUp] = useState<boolean | null>(null);
   const [faucetBusy, setFaucetBusy] = useState(false);
   const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 历史面板刷新键：每次终局 +1，让面板不用等轮询就能更新 */
+  const [historyRefresh, setHistoryRefresh] = useState(0);
   /** 轮询 effect 通过 ref 取最新的刷新函数与房间号，避免闭包拿到过期值 */
   const refreshRef = useRef<((id: bigint, silent?: boolean) => Promise<void>) | null>(null);
   const roomRef = useRef<bigint | null>(null);
@@ -486,7 +489,7 @@ export default function App() {
     // legality already filtered by Board; never send illegal
     const fee = legalMoves(board, seat).find((m: LegalMove) => m.from.x === from.x && m.from.y === from.y && m.to.x === to.x && m.to.y === to.y
     )?.fee;
-    const capturedBefore = board.cells[to.y][to.x].piece !== Piece.Empty;
+    const capturedBefore = board.cells[to.x].piece !== Piece.Empty;
     setBusy(true);
     setStatus(`提交走子… 预估 ${fee !== undefined ? formatMon(fee) : "?"} MON`);
     try {
@@ -519,7 +522,7 @@ export default function App() {
       forceBetrayal: false,
     });
     if (!pick) return;
-    await onMove(pick.from, pick.to, board.cells[pick.from.y][pick.from.x].piece);
+    await onMove(pick.from, pick.to, board.cells[pick.from.x].piece);
   }
 
   async function doTopUp() {
@@ -695,6 +698,7 @@ export default function App() {
       await ensureAgentRegistered(aiAccount);
       const mh = keccak256(encodePacked(["string"], [motive]));
       await finalizeGame(deployer, gameId, mh);
+      setHistoryRefresh((n) => n + 1);
       const rep = await readReputation(aiAccount.address);
       setTrustScore(Number(rep.trustScore));
       setSlashedCount(Number(rep.slashed));
@@ -836,6 +840,7 @@ export default function App() {
       setForcedBurn(burned);
       await ensureAgentRegistered(aiAccount);
       await finalizeGame(deployer, id, keccak256(encodePacked(["string"], [motive])));
+      setHistoryRefresh((n) => n + 1);
       const rep = await readReputation(aiAccount.address);
       setTrustScore(Number(rep.trustScore));
       setSlashedCount(Number(rep.slashed));
@@ -882,7 +887,7 @@ export default function App() {
         <div className="brand">
           <h1>三国棋局 · Shadow Xiangqi</h1>
           <p className="tagline">
-            三人象棋桌上藏着押金 AI 卧底——步步一笔交易烧 MON。氪金可打华丽远程车；性价比党靠省油与逼破产取胜。非法着法永不放行。
+            三国围棋桌上藏着押金 AI 卧底——步步一笔交易烧 MON。氪金可打华丽远程车；性价比党靠省油与逼破产取胜。非法着法永不放行。
           </p>
           <div className="badge-row">
             <span className="badge accent">赛道 04 · AI 身份与声誉</span>
@@ -1003,6 +1008,8 @@ export default function App() {
 
         <div className="sidebar">
           <ScorePanel seats={seats.map((s) => ({ ...s, isYou: s.seat === activeSeat }))} turn={turn} playing={phase === 1} />
+
+          <HistoryPanel refreshKey={historyRefresh} />
 
           {!isLocalDemo && (
             <div className="panel">

@@ -112,6 +112,16 @@ function openDb(dbPath: string): DatabaseSync {
 
     CREATE INDEX IF NOT EXISTS idx_seats_player ON seats(player);
 
+    -- 对局结束时合约会把 points 清零（进奖池/孤儿池），所以 seats.points
+    -- 只能反映"当前值"，不能用来做历史统计。points_earned 由吃子事件累计，
+    -- 一旦写入就不会被终局清零，排行榜用它而不是 points。
+    CREATE TABLE IF NOT EXISTS seat_points (
+      game_id INTEGER NOT NULL,
+      seat INTEGER NOT NULL,
+      points_earned INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (game_id, seat)
+    );
+
     CREATE TABLE IF NOT EXISTS reputation (
       agent TEXT PRIMARY KEY,
       games INTEGER NOT NULL,
@@ -131,6 +141,68 @@ function openDb(dbPath: string): DatabaseSync {
     );
   `);
   return db;
+}
+
+/**
+ * 从吃子/夺分事件累计每个座位"曾经赚到"的分数。
+ *
+ * 为什么不能直接用 seats.points：合约在终局结算里会把 points 用掉
+ * （进奖池、孤儿池），结算后链上读到的是 0。实测：一局里吃到 2 子的一方，
+ * 终局后 getSeat 返回 points=0。所以历史统计必须自己累计事件。
+ *
+ * 幂等：每个 (gameId, seat) 只按"事件最大值"更新，重复扫描同一局不会翻倍。
+ */
+async function scanPoints(
+  pub: PublicClient,
+  cfg: Config,
+  db: DatabaseSync,
+  gameAbi: Abi,
+  fromBlock: bigint,
+  toBlock: bigint
+) {
+  if (fromBlock > toBlock) return;
+  const [settled, seized] = await Promise.all([
+    pub.getContractEvents({
+      address: cfg.gameTable,
+      abi: gameAbi,
+      eventName: "CaptureSettled",
+      fromBlock,
+      toBlock,
+    }),
+    pub.getContractEvents({
+      address: cfg.gameTable,
+      abi: gameAbi,
+      eventName: "PointsSeized",
+      fromBlock,
+      toBlock,
+    }),
+  ]);
+
+  const gained = new Map<string, number>();
+  const bump = (gameId: number, seat: number, pts: number) => {
+    const k = `${gameId}:${seat}`;
+    gained.set(k, (gained.get(k) ?? 0) + pts);
+  };
+  for (const e of settled) {
+    const a = e.args as { gameId?: bigint; attacker?: number; pointsDelta?: number };
+    if (a.gameId === undefined || a.attacker === undefined) continue;
+    bump(Number(a.gameId), Number(a.attacker), Number(a.pointsDelta ?? 0));
+  }
+  for (const e of seized) {
+    const a = e.args as { gameId?: bigint; killer?: number; points?: number };
+    if (a.gameId === undefined || a.killer === undefined) continue;
+    bump(Number(a.gameId), Number(a.killer), Number(a.points ?? 0));
+  }
+
+  const up = db.prepare(
+    `INSERT INTO seat_points (game_id, seat, points_earned) VALUES (?,?,?)
+     ON CONFLICT(game_id, seat) DO UPDATE SET
+       points_earned = MAX(points_earned, excluded.points_earned)`
+  );
+  for (const [k, v] of gained) {
+    const [g, seat] = k.split(":");
+    up.run(Number(g), Number(seat), v);
+  }
 }
 
 /** 把一个对局快照写库（幂等，重复扫到同一局会覆盖更新）。 */
@@ -246,6 +318,20 @@ async function scanOnce(
     }
   }
 
+  // 事件累计：用 meta 记录已扫块高，只扫增量
+  const fromRow = db.prepare(`SELECT value FROM meta WHERE key='points_scanned_block'`).get() as
+    | { value: string }
+    | undefined;
+  const latest = await pub.getBlockNumber();
+  const fromBlock = fromRow ? BigInt(fromRow.value) + 1n : 0n;
+  if (fromBlock <= latest) {
+    await scanPoints(pub, cfg, db, gameAbi, fromBlock, latest);
+    db.prepare(
+      `INSERT INTO meta (key, value) VALUES ('points_scanned_block', ?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value`
+    ).run(String(latest));
+  }
+
   db.prepare(
     `INSERT INTO meta (key, value) VALUES ('last_scan', ?)
      ON CONFLICT(key) DO UPDATE SET value=excluded.value`
@@ -300,7 +386,9 @@ const seatOut = (r: Record<string, unknown>) => ({
   occupied: Boolean(r.occupied),
   seatStake: String(r.seat_stake),
   playBalance: String(r.play_balance),
+  // 终局后合约会把 points 清零，所以给面板的是"累计赚分"
   points: Number(r.points),
+  pointsEarned: Number(r.points_earned ?? 0),
   eliminated: Boolean(r.eliminated),
   feesPaid: String(r.fees_paid),
   slashed: Boolean(r.slashed),
@@ -323,7 +411,12 @@ function gameOut(db: DatabaseSync, row: Record<string, unknown>, withSeats: bool
   };
   if (!withSeats) return g;
   const seats = db
-    .prepare(`SELECT * FROM seats WHERE game_id = ? ORDER BY seat`)
+    .prepare(
+      `SELECT s.*, COALESCE(sp.points_earned, 0) AS points_earned
+       FROM seats s
+       LEFT JOIN seat_points sp ON sp.game_id = s.game_id AND sp.seat = s.seat
+       WHERE s.game_id = ? ORDER BY s.seat`
+    )
     .all(g.gameId) as Record<string, unknown>[];
   return { ...g, seats: seats.map(seatOut) };
 }
@@ -411,7 +504,11 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
       db.prepare(`SELECT COALESCE(SUM(CAST(fees_paid AS INTEGER)),0) AS v FROM seats WHERE player = ?`)
     ).get(who) as { v: unknown };
     const points = db
-      .prepare(`SELECT COALESCE(SUM(points),0) AS v FROM seats WHERE player = ?`)
+      .prepare(
+        `SELECT COALESCE(SUM(sp.points_earned),0) AS v FROM seat_points sp
+         JOIN seats s ON s.game_id = sp.game_id AND s.seat = sp.seat
+         WHERE s.player = ?`
+      )
       .get(who) as { v: number };
     const slashedTimes = db
       .prepare(`SELECT COUNT(*) AS n FROM seats WHERE player = ? AND slashed = 1`)
@@ -459,10 +556,12 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
         `SELECT s.player,
                 COUNT(*) AS games,
                 SUM(CASE WHEN g.winner_seat = s.seat AND g.phase = ? THEN 1 ELSE 0 END) AS wins,
-                SUM(s.points) AS points,
+                COALESCE(SUM(sp.points_earned), 0) AS points,
                 SUM(CAST(s.fees_paid AS INTEGER)) AS fees,
                 SUM(CASE WHEN s.slashed = 1 THEN 1 ELSE 0 END) AS slashed
-         FROM seats s JOIN games g ON g.game_id = s.game_id
+         FROM seats s
+         JOIN games g ON g.game_id = s.game_id
+         LEFT JOIN seat_points sp ON sp.game_id = s.game_id AND sp.seat = s.seat
          WHERE s.occupied = 1
          GROUP BY s.player
          ORDER BY wins DESC, points DESC
@@ -475,7 +574,9 @@ async function handleApi(db: DatabaseSync, url: URL, req: IncomingMessage, res: 
         games: Number(r.games),
         wins: Number(r.wins),
         winRate: Number(r.games) > 0 ? Number(r.wins) / Number(r.games) : 0,
-        points: Number(r.points),
+        // 终局后合约会把 points 清零，所以给面板的是"累计赚分"
+  points: Number(r.points),
+  pointsEarned: Number(r.points_earned ?? 0),
         feesBurnedMon: formatEther(toBig(r.fees)),
         timesSlashed: Number(r.slashed),
       })),
