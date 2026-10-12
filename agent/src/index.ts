@@ -151,8 +151,6 @@ class MoleAgent {
           functionName: "getSeat",
           args: [id, this.seat],
         })) as readonly [string, bigint, bigint, number, boolean];
-        const isMine = seat[0].toLowerCase() === this.ctx.account.address.toLowerCase();
-        if (!isMine) continue;
         const meta = (await this.ctx.pub.readContract({
           address: this.cfg.addresses.GameTable,
           abi: ABIS.GameTable,
@@ -160,7 +158,35 @@ class MoleAgent {
           args: [id],
         })) as readonly [number, number, number, boolean, number, bigint];
         const phase = Number(meta[0]);
-        if (phase === 0 || phase === 1) out.push(id);
+        const isMine = seat[0].toLowerCase() === this.ctx.account.address.toLowerCase();
+
+        // 已入座的局：大厅或行棋中都继续跟进
+        if (isMine && (phase === 0 || phase === 1)) {
+          out.push(id);
+          continue;
+        }
+
+        // 还没入座、但我的座位空着的大厅局：补位。
+        //
+        // 为什么要这个：常驻 agent 如果只认"我已在座"的局，就永远在空转 ——
+        // 人类建房后 agent 不会自己进来，房间永远凑不齐第三个人。
+        //
+        // ⚠️ 只补已经有别人在座的房：否则 agent 会自己建出一堆空房，
+        //    既没人陪它玩，又把它的余额一份份锁进 1 MON 的质押里。
+        if (!isMine && phase === 0 && seat[0] === "0x0000000000000000000000000000000000000000") {
+          let othersSeated = 0;
+          for (const other of [0, 1, 2]) {
+            if (other === this.seat) continue;
+            const os = (await this.ctx.pub.readContract({
+              address: this.cfg.addresses.GameTable,
+              abi: ABIS.GameTable,
+              functionName: "getSeat",
+              args: [id, other],
+            })) as readonly [string, bigint, bigint, number, boolean];
+            if (os[0] !== "0x0000000000000000000000000000000000000000") othersSeated++;
+          }
+          if (othersSeated > 0) out.push(id);
+        }
       } catch {
         /* 该 id 可能不存在 */
       }
