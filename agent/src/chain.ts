@@ -4,7 +4,7 @@
  * 与前端不同：这里用**自己的私钥**（AGENT_KEY）签名，绝不接触任何玩家私钥。
  * ABI 直接复用 frontend/src/abi（deploy 脚本已保证与编译产物同步）。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
@@ -54,8 +54,14 @@ export type AgentConfig = {
 
 export function loadConfig(): AgentConfig {
   const env = process.env;
-  const addrFile = path.join(repoRoot, "frontend/src/lib/addresses.json");
-  const fileAddrs = JSON.parse(readFileSync(addrFile, "utf8")) as Record<string, string>;
+  // 先读 CHAIN_ID，再选地址文件（10143 → addresses.10143.json）
+  const chainIdHint = Number(env.CHAIN_ID ?? 31337);
+  const addrName = chainIdHint === 10143 ? "addresses.10143.json" : "addresses.json";
+  const addrFile = path.join(repoRoot, "frontend/src/lib", addrName);
+  const fallbackFile = path.join(repoRoot, "frontend/src/lib/addresses.json");
+  const fileAddrs = JSON.parse(
+    readFileSync(existsSync(addrFile) ? addrFile : fallbackFile, "utf8")
+  ) as Record<string, string>;
 
   const rpcUrl = env.RPC_URL ?? env.MONAD_RPC ?? fileAddrs.rpcUrl ?? "http://127.0.0.1:8545";
   const chainId = Number(env.CHAIN_ID ?? fileAddrs.chainId ?? 31337);

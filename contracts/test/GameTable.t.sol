@@ -34,7 +34,10 @@ contract GameTableTest is Test {
     }
 
     function _start() internal returns (uint256 id) {
-        id = game.createGame(2);
+        // AI 必须先注册，join 时才会绑定 aiSeat（不再靠 createGame 参数泄漏）
+        vm.prank(c);
+        reg.registerAgent("ipfs://agent");
+        id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b);
@@ -61,7 +64,7 @@ contract GameTableTest is Test {
 
     function test_CreateAndJoinHideAi() public {
         vm.recordLogs();
-        uint256 id = game.createGame(2);
+        uint256 id = game.createGame();
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertEq(logs.length, 1);
         assertEq(logs[0].topics.length, 2);
@@ -174,7 +177,7 @@ contract GameTableTest is Test {
 
     /// @dev B1 回归：陌生人不能把一局还没开始的 Lobby 局结算掉。
     function test_FinalizeLobbyGameReverts() public {
-        uint256 id = game.createGame(2);
+        uint256 id = game.createGame();
         address stranger = address(0xBEEF);
         vm.prank(stranger);
         vm.expectRevert(bytes("not done"));

@@ -32,7 +32,9 @@ contract StuckCommitTest is Test {
     }
 
     function _start() internal returns (uint256 id) {
-        id = game.createGame(2);
+        vm.prank(c);
+        reg.registerAgent("ipfs://agent");
+        id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b);

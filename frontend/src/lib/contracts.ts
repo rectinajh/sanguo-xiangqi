@@ -10,7 +10,7 @@ import gameAbi from "../abi/GameTable.json";
 import covAbi from "../abi/Covenant.json";
 import regAbi from "../abi/AgentRegistry.json";
 import { JOIN_VALUE, NODE_COUNT, Piece, type BoardState, type Seat } from "@sanguo/shared";
-import { addresses, getPublicClient, getWalletClient, getSignerWalletClient, type Signer } from "./chain";
+import { addresses, getPublicClient, getWalletClient, getWriteWalletClient, type Signer } from "./chain";
 export const gameTableAbi = gameAbi as any;
 export const covenantAbi = covAbi as any;
 export const registryAbi = regAbi as any;
@@ -168,14 +168,14 @@ export function moveCommitHash(
   );
 }
 
-export async function createGame(account: Signer, aiSeat: number) {
-  const wallet = getSignerWalletClient();
+export async function createGame(account: Signer) {
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
     abi: gameTableAbi,
     functionName: "createGame",
-    args: [aiSeat],
+    args: [],
     account,
     chain: wallet.chain,
   });
@@ -203,7 +203,7 @@ export async function createGame(account: Signer, aiSeat: number) {
 }
 
 export async function joinGame(account: Signer, gameId: bigint, seat: number, value = JOIN_VALUE) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -226,7 +226,7 @@ export async function joinGame(account: Signer, gameId: bigint, seat: number, va
  * 调用方应读 abandonStatusOf 判断还差几票。
  */
 export async function abandonGame(account: Signer, gameId: bigint) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -242,7 +242,7 @@ export async function abandonGame(account: Signer, gameId: bigint) {
 
 /** 取回被放弃大厅局里的钱。 */
 export async function claimAbandonRefund(account: Signer, gameId: bigint) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -298,7 +298,7 @@ export async function commitAndReveal(
     encodePacked(["string", "uint256"], [`salt-${Date.now()}`, BigInt(Math.floor(Math.random() * 1e9))])
   );
   const ch = moveCommitHash(seat, from.x, from.y, to.x, to.y, piece, salt);
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
 
   const hashes = await wallet.writeContract({
@@ -337,7 +337,7 @@ export async function pendingCommitOf(gameId: bigint): Promise<{
 
 /** 清掉当前行棋方超时未揭示的 commit（任何人可调用），并推进回合。 */
 export async function expireCommit(account: Signer, gameId: bigint) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -466,7 +466,7 @@ export async function readMeta(gameId: bigint) {
 }
 
 export async function directorDrain(account: Signer, gameId: bigint, seat: number, amount: bigint) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -480,7 +480,7 @@ export async function directorDrain(account: Signer, gameId: bigint, seat: numbe
 }
 
 export async function directorRelocate(account: Signer, gameId: bigint, fromNode: number, toNode: number) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -494,7 +494,7 @@ export async function directorRelocate(account: Signer, gameId: bigint, fromNode
 }
 
 export async function finalizeGame(account: Signer, gameId: bigint, motiveHash: Hex) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -515,7 +515,7 @@ export async function lockEarnest(
   seat: number,
   value: bigint = parseEther("0.1")
 ) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: covenantAddress(),
@@ -538,7 +538,7 @@ export async function lockPeaceOffer(
   bribeAmount: bigint,
   plies: number
 ) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const value = parseEther("0.1") + parseEther("0.05") + bribeAmount;
   const hash = await wallet.writeContract({
@@ -554,6 +554,22 @@ export async function lockPeaceOffer(
   return hash;
 }
 
+/** 诚意金过期（或发起方主动）退回。 */
+export async function refundExpiredEarnest(account: Signer, covenantHash: Hex) {
+  const wallet = getWriteWalletClient(account);
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: covenantAddress(),
+    abi: covenantAbi,
+    functionName: "refundExpiredEarnest",
+    args: [covenantHash],
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
 export async function activateCovenant(
   account: Signer,
   preimage: CovenantPreimage,
@@ -561,7 +577,7 @@ export async function activateCovenant(
   sigJ: Hex,
   value: bigint
 ) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: covenantAddress(),
@@ -637,7 +653,7 @@ export async function activatedPlyOf(hash: Hex) {
 }
 
 export async function withdrawTreasury(account: Signer, gameId: bigint, to: `0x${string}`, amount: bigint) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),
@@ -663,7 +679,7 @@ export async function protocolTreasuryOf(gameId: bigint) {
 
 /** AI 座位注册声誉身份；只有注册过的地址才写得进战绩。 */
 export async function registerAgent(account: Signer, metadataURI: string) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: registryAddress(),
@@ -683,7 +699,7 @@ export async function challengeBetrayal(
   betrayerSeat: number,
   clause: number
 ) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: covenantAddress(),
@@ -698,13 +714,13 @@ export async function challengeBetrayal(
 }
 
 export async function signCovenantHash(account: Signer, covenantHash: Hex): Promise<Hex> {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   // 浏览器钱包也能对 raw bytes 做 personal_sign，所以本地钥与注入式钱包通用
   return wallet.signMessage({ account, message: { raw: covenantHash } });
 }
 
 export async function depositPlayBalance(account: Signer, gameId: bigint, seat: number, amount: bigint) {
-  const wallet = getSignerWalletClient();
+  const wallet = getWriteWalletClient(account);
   const pub = getPublicClient();
   const hash = await wallet.writeContract({
     address: gameAddress(),

@@ -30,18 +30,20 @@ Three-player Xiangqi with one staked AI mole — every move is a transaction tha
 
 ```
 [浏览器]
-  棋盘（合法格 + fee）· 双账本 · 临时钱包 · 导演代走
+  棋盘（合法格 + fee）· 双账本
+  本地 Anvil：临时钱包 + 一键 Demo
+  测试网：EIP-1193 钱包签名（私钥不出浏览器）
         | JSON-RPC
 [合约]
   GameTable      入座 / commit-reveal / 吃子 / 破产 / 终局
+                 createGame() 不写 aiSeat；Agent 入座时绑定卧底
   Covenant       诚意金 + 双 ECDSA + 吃子证据 Slash
   AgentRegistry  终局写入胜负、slash、forcedBurnMon
   StubVerifier   空证明 = ECDSA 路径；任何非空证明失败
         |
 [AI]
-  页内 pickAiMove：盟约满 10 手后优先吃盟友的士
-  3 分钟剧本用同一函数，forceBetrayal 打出真实吃士
-  独立进程未做。AI 钥是另一把，不读人类 session key
+  独立进程 `pnpm agent`（自有 AGENT_KEY，永不读玩家钥）
+  本地 Demo 另可用页内剧本；公网必须跑 agent
 ```
 
 `forcedBurnMon` = 另外两座已经付掉的 moveFee 之和。
@@ -104,7 +106,7 @@ pnpm indexer:once     # 只扫一轮后退出（适合 CI / 定时任务）
 ```bash
 RPC_URL=https://testnet-rpc.monad.xyz \
 CHAIN_ID=10143 \
-INDEXER_START_BLOCK=70345306 \
+INDEXER_START_BLOCK=70451369 \
 pnpm indexer
 ```
 
@@ -154,13 +156,47 @@ MONAD_RPC=https://testnet-rpc.monad.xyz PRIVATE_KEY=0x... pnpm deploy:testnet
 前端指向测试网有两种方式：把上面那个文件的内容配上 `VITE_*` 环境变量（见 `frontend/.env.example`），
 或让 `deploy:testnet` 的产物走 CI 注入。
 
-当前仓库没有一笔已确认的 10143 交易。主网 143 不在这一版。
+### 已部署地址（Monad Testnet `10143`）
+
+见 [`frontend/src/lib/addresses.10143.json`](frontend/src/lib/addresses.10143.json)（`createGame()` 无 aiSeat 版本）：
+
+| 合约 | 地址 |
+|------|------|
+| GameTable | `0x808a1e24d13681e4666706d60def28afe21859af` |
+| Covenant | `0x857ff987f28564b7f7b6a58cd421bd4e01ec80b9` |
+| AgentRegistry | `0x9c19c6213dc150c9fe38a20fae0721bd9935c012` |
+| StubVerifier | `0xc0ff952f5679c877a1bd4cabdf9b2348e3d3b333` |
+
+部署广播（节选）：
+- `0x3e31bbee4ed6656141a8bcb2e3adc248e9f44af94550ecffd27f1c3b22a49319`
+- `0xd45aeaa01e9f20ff20b7b9348a2e27f61de315e30ef3bb960ba325486c73e25f`
+- `0xb90277c2f34eb57b8781e74d776637f5cee7a82789c2bb069e41d9eeffb090a8`
+
+示例交互（新部署后 `createGame()` → `gameId=1`）：
+- `0xdba503caa49d10e0fc9f35c9b3aa85102e8e905624d1b6ed080f75a542d4ca2f`
+
+索引器起点建议：`INDEXER_START_BLOCK=70451369`（本轮部署块）。
+
+水龙头：[Monad testnet faucet](https://faucet.monad.xyz)（前端默认 `VITE_FAUCET_URL` 也指向这里）。
+
+产物目录：`contracts/broadcast/Deploy.s.sol/10143/`。浏览器：[monadexplorer](https://testnet.monadexplorer.com)。
+
+### 公网 AI agent
+
+```bash
+# agent/.env：CHAIN_ID=10143、RPC_URL、自有 AGENT_KEY（有 MON）、AGENT_SEAT=2
+cd agent && pnpm start   # 或仓库根目录 pnpm agent
+```
+
+Agent 会先 `registerAgent`，再自动入座空着的绿营，并轮询走子 / 接盟 / 背刺。前端创建房间后把邀请链接发给人类朋友即可。
+
+主网 143 不在这一版。
 
 ## 已实现 / 未做
 
-已实现：费用、commit-reveal、吃子与击败 40% 质押、按最便宜合法着破产、人类补给、AI 禁止补给、诚意金上限读链上余额、疏火、证据 Slash、60 秒未揭示扣 0.03 MON、终局 70/20/10、声誉；**浏览器钱包接入**、**邀请链接房间（含实时轮询）**、**水龙头服务**、**独立 AI agent 进程**。
+已实现：费用、commit-reveal、吃子与击败 40% 质押、按最便宜合法着破产、人类补给、AI 禁止补给、诚意金、疏火、证据 Slash、终局 70/20/10、声誉；**EIP-1193 钱包写链**、**创建房间用用户钥**、**createGame 不泄漏 aiSeat**、**跨钱包盟约要约**、**邀请链接 + 轮询**、**独立 AI agent**、**索引器 / 排行榜**。
 
-未做：完整 ZK、谣言店、指控投票、代付盟友油费、完整棋规、将军/将死判定、匹配大厅与排行榜。
+未做：完整 ZK、谣言店、指控投票、代付盟友油费、完整棋规、将军/将死判定、自动匹配大厅。
 
 ### 安全说明（评审修复）
 

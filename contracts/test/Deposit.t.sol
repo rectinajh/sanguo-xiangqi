@@ -26,7 +26,9 @@ contract DepositTest is Test {
     }
 
     function test_HumanDepositOk_AiBlocked() public {
-        uint256 id = game.createGame(2);
+        vm.prank(cAi);
+        reg.registerAgent("ipfs://agent");
+        uint256 id = game.createGame();
         vm.prank(a); game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b); game.join{value: JOIN_VALUE}(id, 1);
         vm.prank(cAi); game.join{value: JOIN_VALUE}(id, 2);

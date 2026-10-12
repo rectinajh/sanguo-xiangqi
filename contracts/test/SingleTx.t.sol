@@ -32,10 +32,13 @@ contract SingleTxTest is Test {
         vm.deal(c, 10 ether);
         reg = new AgentRegistry();
         game = new GameTable(address(reg));
+        reg.setGameTable(address(game));
     }
 
     function _start() internal returns (uint256 id) {
-        id = game.createGame(2);
+        vm.prank(c);
+        reg.registerAgent("ipfs://agent");
+        id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b);

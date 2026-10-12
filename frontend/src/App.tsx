@@ -45,7 +45,6 @@ import {
   requestInjectedAccount,
   ensureInjectedChain,
   assertCorrectChain,
-  getInjectedWalletClient,
 } from "./lib/chain";
 import {
   copyText,
@@ -85,6 +84,8 @@ import {
   buildPreimage,
   registerAgent,
   clausesOf,
+  refundExpiredEarnest,
+  type CovenantPreimage,
 } from "./lib/contracts";
 
 type LogItem = { t: string; hl?: boolean };
@@ -137,8 +138,9 @@ export default function App() {
     humanA?: SessionWallet;
     humanB?: SessionWallet;
   }>({});
-  const aiAccount = useMemo(() => accountFromKey(ANVIL_KEYS.ai), []);
-  const deployer = useMemo(() => accountFromKey(ANVIL_KEYS.deployer), []);
+  /** 仅本地 Anvil 才实例化公开测试钥；生产包不持有 AI / deployer 私钥。 */
+  const aiAccount = useMemo(() => (IS_LOCAL_DEMO ? accountFromKey(ANVIL_KEYS.ai) : null), []);
+  const deployer = useMemo(() => (IS_LOCAL_DEMO ? accountFromKey(ANVIL_KEYS.deployer) : null), []);
 
   // ── 真实玩家身份 ─────────────────────────────────────────────
   // 本地演示（chainId 31337）沿用内置测试钥 + 双人左右互搏；
@@ -147,6 +149,10 @@ export default function App() {
   const [walletKind, setWalletKind] = useState<"none" | "injected" | "local">("none");
   const [chainName, setChainName] = useState<string>("");
   const isLocalDemo = IS_LOCAL_DEMO;
+  /** 跨浏览器盟约：发起方生成的可分享要约 */
+  const [pendingOfferText, setPendingOfferText] = useState<string | null>(null);
+  const [prizePool, setPrizePool] = useState<bigint | null>(null);
+  const [revealedAiSeat, setRevealedAiSeat] = useState<Seat>(AI_SEAT);
   /** 我在链上占的座位；null 表示还没入座 */
   const [mySeatOrNull, setMySeatOrNull] = useState<Seat | null>(null);
 
@@ -329,7 +335,7 @@ export default function App() {
       setStatus("从 Anvil 灌测币…");
       await fundFromAnvil(humanA.address, "8");
       await fundFromAnvil(humanB.address, "8");
-      await fundFromAnvil(aiAccount.address, "8");
+      if (aiAccount) await fundFromAnvil(aiAccount.address, "8");
       setConnected(true);
       setStatus("钱包就绪 · 可开局");
       log(`临时钱包 A ${humanA.address.slice(0, 8)}…`);
@@ -347,6 +353,9 @@ export default function App() {
   }
 
   function accountForSeat(seat: Seat): Account {
+    if (!isLocalDemo || !aiAccount) {
+      throw new Error("本地演示密钥仅在 Anvil 可用；公网请用连接钱包签名");
+    }
     if (seat === AI_SEAT) return aiAccount;
     if (seat === 0) return toAccount(wallets.humanA!);
     return toAccount(wallets.humanB!);
@@ -441,6 +450,10 @@ export default function App() {
 
   /** 开一张新房并生成邀请链接（真实钱包模式下的主入口）。 */
   async function createRoom() {
+    if (!walletAddress) {
+      toast("请先连接钱包", "创建房间需要你的钱包签名");
+      return;
+    }
     setBusy(true);
     setStatus("创建房间…");
     try {
@@ -451,8 +464,11 @@ export default function App() {
       setActivatedPly(null);
       setAiRevealed(false);
       setRevealOpen(false);
+      setPendingOfferText(null);
+      setPrizePool(null);
 
-      const id = await createGame(deployer, AI_SEAT);
+      // 不传 aiSeat：卧底座由已注册 Agent 入座时绑定，calldata 不泄漏身份
+      const id = await createGame(walletAddress);
       setGameId(id);
       setRoomId(id);
       roomRef.current = id;
@@ -460,9 +476,9 @@ export default function App() {
       const link = inviteLinkFor(id);
       setInviteLink(link);
       setInviteCopied(false);
-      log(`房间 #${id} 已创建 · 把邀请链接发给两位朋友`, true);
+      log(`房间 #${id} 已创建 · 把邀请链接发给朋友；AI agent 会自动入座`, true);
       log(`邀请链接 ${link}`);
-      toast("房间已创建", "复制邀请链接，发给两位朋友各入一座");
+      toast("房间已创建", "复制邀请链接；请另开终端跑 pnpm agent");
       await refreshChainSeats(id);
     } catch (e: unknown) {
       toast("建房失败", friendlyError(e));
@@ -587,7 +603,7 @@ export default function App() {
   }
 
   async function startMatch() {
-    if (!wallets.humanA || !wallets.humanB) return;
+    if (!isLocalDemo || !deployer || !aiAccount || !wallets.humanA || !wallets.humanB) return;
     setBusy(true);
     setStatus("创建对局…");
     try {
@@ -599,23 +615,24 @@ export default function App() {
       setAiRevealed(false);
       setRevealOpen(false);
 
-      const id = await createGame(deployer, AI_SEAT);
+      await ensureAgentRegistered(aiAccount);
+      const id = await createGame(deployer);
       setGameId(id);
-      log(`Game #${id} 创建 · 卧底身份未写入公开事件`, true);
+      log(`Game #${id} 创建 · 卧底座不在 calldata 里`, true);
 
       await joinGame(toAccount(wallets.humanA), id, 0, JOIN_VALUE);
       log("红营入座 · 锁 1 MON + 2 MON 作战余额");
       await joinGame(toAccount(wallets.humanB), id, 1, JOIN_VALUE);
       log("蓝营入座");
       await joinGame(aiAccount, id, 2, JOIN_VALUE);
-      log("绿营入座");
+      log("绿营入座 · AI 身份由 AgentRegistry 绑定");
 
       await refreshChainSeats(id);
       setStatus("对局进行中 · 每步一笔链上交易");
       toast("三座已满", "开始行棋 — 点己子看合法格与油费");
       setMySeat(0);
     } catch (e: unknown) {
-      toast("开局失败", String(e));
+      toast("开局失败", friendlyError(e));
       setStatus("开局失败");
     } finally {
       setBusy(false);
@@ -625,6 +642,10 @@ export default function App() {
   async function onMove(from: Coord, to: Coord, piece: Piece) {
     if (gameId === null || busy) return;
     const seat = board.turn;
+    if (!canSignFor(seat as Seat)) {
+      toast("不是你的回合", "只能操控自己入座的那一座");
+      return;
+    }
     // legality already filtered by Board; never send illegal
     const fee = legalMoves(board, seat).find((m: LegalMove) => m.from.x === from.x && m.from.y === from.y && m.to.x === to.x && m.to.y === to.y
     )?.fee;
@@ -632,7 +653,7 @@ export default function App() {
     setBusy(true);
     setStatus(`提交走子… 预估 ${fee !== undefined ? formatMon(fee) : "?"} MON`);
     try {
-      const acct = accountForSeat(seat);
+      const acct = signerForSeat(seat as Seat);
       await commitAndReveal(acct, gameId, seat, from, to, piece);
       const synced = await readBoard(gameId);
       setBoard(synced);
@@ -668,7 +689,7 @@ export default function App() {
     if (gameId === null || mySeat === AI_SEAT) return;
     setBusy(true);
     try {
-      await depositPlayBalance(accountForSeat(mySeat), gameId, mySeat, parseEther("1"));
+      await depositPlayBalance(signerForSeat(mySeat), gameId, mySeat, parseEther("1"));
       await refreshChainSeats(gameId);
       log(`${SEAT_LABEL_ZH[mySeat]} 补给油费 +1 MON（氪金路线）`, true);
       toast("油费已补给", "+1 MON 作战余额 · 可打远程车");
@@ -680,54 +701,137 @@ export default function App() {
   }
 
   async function proposeAlliance(to: Seat, kind: "ally" | "peace" = "ally") {
-    if (gameId === null || !wallets.humanA) return;
+    if (gameId === null) return;
+    const from = (activeSeat ?? mySeat) as Seat;
+    if (!canSignFor(from)) {
+      toast("无法结盟", "请先入座并用自己的钱包操作");
+      return;
+    }
     setBusy(true);
     try {
-      // 条款与 bond 现在都进入被签名的 preimage：链上会校验
-      // keccak256(abi.encode(preimage)) == covenantHash，调用者无法再现场改条款。
       const clauses = kind === "peace" ? [CLAUSE_BUY_PEACE, CLAUSE_NO_CAPTURE_ADVISOR] : [CLAUSE_NO_CAPTURE_ADVISOR, CLAUSE_NO_EXPOSE];
       const bondAmount = BOND_PER_CLAUSE * BigInt(clauses.length);
       const { preimage, hash } = buildPreimage({
         gameId,
-        seatI: mySeat,
+        seatI: from,
         seatJ: to,
         clauses,
         bondAmount,
       });
       setCovenantHash(hash);
       setCovenantBetrayer(to);
-      const me = accountForSeat(mySeat);
-      const other = accountForSeat(to);
-
-      // 发起方锁诚意金（0.1）；激活时按身份各自补足自己那一半 bond。
+      const me = signerForSeat(from);
       const earnest = preimage.earnestBond;
+
       if (kind === "peace") {
-        await lockPeaceOffer(me, gameId, hash, mySeat, parseEther("0.25"), 8);
+        await lockPeaceOffer(me, gameId, hash, from, parseEther("0.25"), 8);
         log("疏火要约已锁 · 贿金 0.25 MON · 8 手停火（事件无座位）", true);
         toast("疏火诚意金", "第三方看不见你在疏通谁");
       } else {
-        await lockEarnest(me, gameId, hash, mySeat, earnest);
+        await lockEarnest(me, gameId, hash, from, earnest);
         log(`诚意金已锁 · hash ${hash.slice(0, 10)}…`, true);
         toast("诚意金锁定", "第三方看不见求援对象");
       }
 
-      // 双方对同一个 covenantHash 签名 —— 签的就是上面那份条款。
       const sigI = await signCovenantHash(me, hash);
-      const sigJ = await signCovenantHash(other, hash);
 
-      // 由对手方激活：它付自己那一半 + 替发起方补齐缺口（发起方已锁的
-      // 诚意金抵扣了自己那一半）。链上按身份计费，不再看谁在调用。
-      const each = bondAmount / 2n;
-      const proposerOwed = each > earnest ? each - earnest : 0n;
-      const value = proposerOwed + each;
-      await activateCovenant(other, preimage, sigI, sigJ, value);
-      setCovenantActive(true);
-      setActivatedPly(ply);
-      log(kind === "peace" ? "疏火盟约 Active · 停火窗口开启" : "盟约 Active（G1 隐座位）", true);
-      toast(kind === "peace" ? "疏火生效" : "秘密盟约生效", "违约可 Slash；非法着法仍禁止");
-      setAllianceOpen(false);
+      // 本地演示：本机替对方签名并直接激活
+      if (isLocalDemo && wallets.humanA) {
+        const other = accountForSeat(to);
+        const sigJ = await signCovenantHash(other, hash);
+        const each = bondAmount / 2n;
+        const proposerOwed = each > earnest ? each - earnest : 0n;
+        await activateCovenant(other, preimage, sigI, sigJ, proposerOwed + each);
+        setCovenantActive(true);
+        setActivatedPly(ply);
+        setPendingOfferText(null);
+        log(kind === "peace" ? "疏火盟约 Active · 停火窗口开启" : "盟约 Active（G1 隐座位）", true);
+        toast(kind === "peace" ? "疏火生效" : "秘密盟约生效", "违约可 Slash；非法着法仍禁止");
+        setAllianceOpen(false);
+        return;
+      }
+
+      // 真多人：把要约交给对方钱包确认
+      const offer = JSON.stringify({
+        v: 1,
+        hash,
+        sigI,
+        preimage: {
+          ...preimage,
+          gameId: preimage.gameId.toString(),
+          bondAmount: preimage.bondAmount.toString(),
+          earnestBond: preimage.earnestBond.toString(),
+        },
+      });
+      setPendingOfferText(offer);
+      toast("要约已发出", "复制文本发给对方，对方粘贴后确认激活");
+      log("盟约要约待对方签名激活", true);
     } catch (e: unknown) {
       toast("盟约失败", friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptAllianceOffer(raw: string) {
+    if (gameId === null || !walletAddress) return;
+    setBusy(true);
+    try {
+      const parsed = JSON.parse(raw) as {
+        hash: Hex;
+        sigI: Hex;
+        preimage: CovenantPreimage & { gameId: string; bondAmount: string; earnestBond: string };
+      };
+      const preimage: CovenantPreimage = {
+        ...parsed.preimage,
+        gameId: BigInt(parsed.preimage.gameId),
+        bondAmount: BigInt(parsed.preimage.bondAmount),
+        earnestBond: BigInt(parsed.preimage.earnestBond),
+        seatI: Number(parsed.preimage.seatI),
+        seatJ: Number(parsed.preimage.seatJ),
+        clauses: parsed.preimage.clauses.map(Number),
+        validFromPly: Number(parsed.preimage.validFromPly),
+        validToPly: Number(parsed.preimage.validToPly),
+        nonce: parsed.preimage.nonce,
+      };
+      const my = seatOfMe();
+      if (my === null || my !== preimage.seatJ) {
+        throw new Error(`这份要约要给座位 ${preimage.seatJ} 确认，你当前不是那一座`);
+      }
+      const me = signerForSeat(my);
+      const sigJ = await signCovenantHash(me, parsed.hash);
+      const each = preimage.bondAmount / 2n;
+      const earnest = preimage.earnestBond;
+      const proposerOwed = each > earnest ? each - earnest : 0n;
+      // 接受方付：自己一半 + 替发起方补齐（诚意金已抵扣）
+      await activateCovenant(me, preimage, parsed.sigI, sigJ, proposerOwed + each);
+      setCovenantHash(parsed.hash);
+      setCovenantActive(true);
+      setActivatedPly(ply);
+      setPendingOfferText(null);
+      setAllianceOpen(false);
+      toast("秘密盟约生效", "违约可 Slash");
+      log("盟约 Active（跨钱包双签）", true);
+    } catch (e: unknown) {
+      toast("接受盟约失败", friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refundMyEarnest() {
+    if (!covenantHash || !walletAddress) {
+      toast("无可退诚意金", "先发起一笔结盟要约");
+      return;
+    }
+    setBusy(true);
+    try {
+      await refundExpiredEarnest(walletAddress, covenantHash);
+      setPendingOfferText(null);
+      toast("诚意金已退回", "要约已过期或已由你取消");
+      log("诚意金退回", true);
+    } catch (e: unknown) {
+      toast("退回失败", friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -742,7 +846,7 @@ export default function App() {
       // 违约方默认为 AI 座位（Demo 主线），可由 covenantBetrayer 覆盖。
       const clauses = await clausesOf(covenantHash);
       const betrayer = covenantBetrayer;
-      const challenger = accountForSeat(mySeat);
+      const challenger = signerForSeat((activeSeat ?? mySeat) as Seat);
 
       let lastErr: unknown = null;
       for (const clause of clauses) {
@@ -814,6 +918,11 @@ export default function App() {
 
   async function doFinalize() {
     if (gameId === null) return;
+    const finisher = isLocalDemo && deployer ? deployer : walletAddress;
+    if (!finisher) {
+      toast("请先连接钱包", "终局需要签名");
+      return;
+    }
     setBusy(true);
     try {
       const meta = await readMeta(gameId);
@@ -821,6 +930,8 @@ export default function App() {
         toast("还不能终局", "需要只剩一方，或达到最大手数");
         return;
       }
+      setPrizePool(meta.prizePool);
+      setWinnerSeat(meta.winnerSeat < 3 ? (meta.winnerSeat as Seat) : null);
       const paid0 = await feesPaidOf(gameId, 0);
       const paid1 = await feesPaidOf(gameId, 1);
       const burned = paid0 + paid1;
@@ -831,24 +942,29 @@ export default function App() {
         `forcedBurnMON=${formatMon(burned)}`,
         `wasSlashed=${slashed}`,
         `ply=${meta.ply}`,
+        `prizePool=${formatMon(meta.prizePool)}`,
       ].join("\n");
       setMotiveLog(motive);
       setForcedBurn(burned);
-      await ensureAgentRegistered(aiAccount);
+      if (isLocalDemo && aiAccount) await ensureAgentRegistered(aiAccount);
       const mh = keccak256(encodePacked(["string"], [motive]));
-      await finalizeGame(deployer, gameId, mh);
+      await finalizeGame(finisher, gameId, mh);
       setHistoryRefresh((n) => n + 1);
-      const rep = await readReputation(aiAccount.address);
-      setTrustScore(Number(rep.trustScore));
-      setSlashedCount(Number(rep.slashed));
-      setForcedBurn(rep.forcedBurnMonTotal);
+      if (aiAccount) {
+        const rep = await readReputation(aiAccount.address);
+        setTrustScore(Number(rep.trustScore));
+        setSlashedCount(Number(rep.slashed));
+        setForcedBurn(rep.forcedBurnMonTotal);
+      }
+      setRevealedAiSeat(AI_SEAT);
+      setAiRevealed(true);
       await refreshChainSeats(gameId);
       setRevealOpen(true);
-      log("终局揭示 · 声誉已写入 AgentRegistry", true);
-      toast("卧底揭晓", SEAT_LABEL_ZH[AI_SEAT]);
+      log(`终局揭示 · 奖池 ${formatMon(meta.prizePool)} MON`, true);
+      toast("卧底揭晓", `${SEAT_LABEL_ZH[AI_SEAT]} · 奖池 ${formatMon(meta.prizePool)} MON`);
       setStatus("对局结束");
     } catch (e: unknown) {
-      toast("终局失败", String(e));
+      toast("终局失败", friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -886,6 +1002,7 @@ export default function App() {
       if (addresses.chainId !== 31337) {
         throw new Error("一键 Demo 只用本地 Anvil 密钥。测试网请用你自己的私钥，不要用公开的 Anvil 钥。");
       }
+      if (!aiAccount || !deployer) throw new Error("Demo 仅限本地 Anvil");
       await fundFromAnvil(humanA.address, "10");
       await fundFromAnvil(humanB.address, "10");
       await fundFromAnvil(aiAccount.address, "10");
@@ -894,7 +1011,8 @@ export default function App() {
       setRevealOpen(false);
 
       const spine = demoSpine();
-      const id = await createGame(deployer, AI_SEAT);
+      await ensureAgentRegistered(aiAccount);
+      const id = await createGame(deployer);
       setGameId(id);
       await joinGame(toAccount(humanA), id, 0, JOIN_VALUE);
       await joinGame(toAccount(humanB), id, 1, JOIN_VALUE);
@@ -1076,9 +1194,11 @@ export default function App() {
           </div>
         </div>
         <div className="actions" style={{ minWidth: 200 }}>
-          <button className="primary" disabled={busy || chainOk === false} onClick={runDemoFull}>
-            {busy ? "进行中…" : "一键 Demo 脊骨"}
-          </button>
+          {isLocalDemo && (
+            <button className="primary" disabled={busy || chainOk === false} onClick={runDemoFull}>
+              {busy ? "进行中…" : "一键 Demo 脊骨"}
+            </button>
+          )}
           <button className="secondary" disabled={busy || chainOk === false} onClick={connectWallet}>
             {connected
               ? walletKind === "injected"
@@ -1089,8 +1209,8 @@ export default function App() {
                 : "连接钱包"}
           </button>
           <button
-            className="secondary"
-            disabled={busy || !connected}
+            className={isLocalDemo ? "secondary" : "primary"}
+            disabled={busy || !connected || chainOk === false}
             onClick={isLocalDemo ? startMatch : createRoom}
           >
             {isLocalDemo ? "新开一局" : "创建房间"}
@@ -1533,21 +1653,26 @@ export default function App() {
 
       <AllianceModal
         open={allianceOpen}
-        fromSeat={mySeat}
-        targets={([0, 1, 2] as Seat[]).filter((s) => s !== mySeat)}
+        fromSeat={(activeSeat ?? mySeat) as Seat}
+        targets={([0, 1, 2] as Seat[]).filter((s) => s !== (activeSeat ?? mySeat))}
         onClose={() => setAllianceOpen(false)}
         onPropose={proposeAlliance}
+        onAcceptOffer={acceptAllianceOffer}
+        onRefundEarnest={refundMyEarnest}
+        pendingOfferText={pendingOfferText}
         busy={busy}
-        isWhale={(seats[mySeat]?.playBalance ?? 0n) >= PLAY_BALANCE_INITIAL * 3n}
+        multiWallet={!isLocalDemo}
+        isWhale={((activeSeat !== null ? seats[activeSeat]?.playBalance : seats[mySeat]?.playBalance) ?? 0n) >= PLAY_BALANCE_INITIAL * 3n}
       />
       <EndgameReveal
         open={revealOpen && aiRevealed}
-        aiSeat={AI_SEAT}
+        aiSeat={revealedAiSeat}
         winnerSeat={winnerSeat}
         motiveLog={motiveLog}
         trustScore={trustScore}
         slashed={slashedCount}
         forcedBurn={forcedBurn}
+        prizePool={prizePool}
         gameId={gameId}
         onOpenPlayer={setProfileAddress}
         onClose={() => setRevealOpen(false)}

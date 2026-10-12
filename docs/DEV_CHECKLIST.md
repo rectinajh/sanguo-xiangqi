@@ -150,9 +150,9 @@ mapping(uint256 => mapping(uint8 => uint8)) public pendingCountBySeat;
 
 顺带两处泄漏：
 - `pendingCountBySeat` 在激活前就暴露"哪个座在求援"；
-- **AI 座位在 calldata 里**：`createGame(uint8 aiSeat)`（`GameTable.sol:116`）。实测交易 input 是 `0xe580f6ab00...0002`，`aiSeat = 2` 直接可读 —— 配合同 tx 的 `GameCreated(gameId)`，"谁是卧底"100% 可查。
+- ~~**AI 座位在 calldata 里**~~：已改为 `createGame()`（无参数），`aiSeat=255`；第一个已注册 Agent 入座时绑定。事件仍然不写 `isAi`。
 
-（事件本身是干净的，`getSeat` 也确实没返回 `isAi`——问题出在 calldata 和这两个 public 映射。）
+（`pendingCountBySeat` 激活前暴露求援座的问题仍在，见下。）
 
 **修复**：两个映射改 `internal`（这是**两行**的修改）；`createGame` 改收 `aiSeatCommit`，终局再 reveal。
 
@@ -333,7 +333,7 @@ fi
 - [ ] **P0-2** 胜者循环补 `player != address(0)` 谓词 — `GameTable.sol:361-367`
 - [ ] **P0-3** `fulfillCovenant` 加违规/终局守卫或时间锁，确保 `challengeBetrayal` 不被抢跑 — `Covenant.sol:283`
 - [ ] **P0-4** `activeBySeat` / `pendingCountBySeat` 改 `internal`（两行） — `Covenant.sol:57-58`
-- [ ] **P0-5** `createGame` 改收 `aiSeatCommit`，终局 reveal，消除 calldata 泄漏 — `GameTable.sol:116`
+- [x] **P0-5** `createGame()` 不再带 aiSeat；Agent 入座时绑定卧底 — `GameTable.sol`
 - [ ] **P0-6** 退还/入账非胜者 seatStake — `GameTable.sol:526-559`
 - [ ] **P0-7** `g.settled = true` 提到 `_payout()` 之前（或加 `nonReentrant`） — `GameTable.sol:380`
 - [ ] **P0-8** `activateCovenant` 按调用者身份收费 + 要求是当事人 — `Covenant.sol:183-187`
@@ -346,11 +346,11 @@ fi
 
 ### 🟠 P1 — 让它能被人体验
 
-- [ ] **P1-1** 接入注入式钱包（`window.ethereum`）+ 网络切换 + 链 ID 校验（现在 `chainOk` 会误报绿色）
-- [ ] **P1-2** `addresses.json` / RPC 改环境变量注入，去掉 `localhost:8545` 构建期烧死 — `chain.ts:11`
-- [ ] **P1-3** 去掉前端里的 AI 私钥，改由独立 agent 服务签名 — `chain.ts:27`
-- [ ] **P1-4** 每座位一个真实钱包：删掉 `操控红营/蓝营` 双控，改为"我只控我的座" — `App.tsx:628-634`
-- [ ] **P1-5** 部署 10143 并把地址与示例 tx 回填 README；提供 faucet 指引
+- [x] **P1-1** 接入注入式钱包（`window.ethereum`）+ 网络切换 + 链 ID 校验 — Wave A1
+- [x] **P1-2** `addresses.json` / RPC 改环境变量注入（`VITE_*` + `addresses.10143.json`）— Wave A
+- [x] **P1-3** 去掉前端生产路径 AI 私钥，改由独立 agent 服务签名 — Wave A2
+- [x] **P1-4** 每座位真实钱包 / 邀请入座（测试网不再双控 Anvil 钥）— Wave A/B
+- [x] **P1-5** 部署 10143 并把地址与示例 tx 回填 README；faucet 指引 — Wave A5（`createGame()` 无 aiSeat 版）
 - [ ] **P1-6** `hasAddresses()` 补查 `AgentRegistry` — `contracts.ts:29-31`
 - [ ] **P1-7** `commitAndReveal` 加半失败处理：reveal 失败时保存 salt / 自动 `expireCommit` — `contracts.ts:120-137`
 - [ ] **P1-8** `doSlash` 去掉硬编码：从 `Covenant.activatedPlyOf` 读激活手数，按实际吃子证据选择 clause — `App.tsx:318`

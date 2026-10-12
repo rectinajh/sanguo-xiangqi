@@ -33,7 +33,7 @@ contract OneSeatPerAddressTest is Test {
     }
 
     function test_SameAddressCannotTakeTwoSeats() public {
-        uint256 id = game.createGame(2);
+        uint256 id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(a);
@@ -43,7 +43,7 @@ contract OneSeatPerAddressTest is Test {
 
     /// 退掉重坐也不允许：合约没有"退座"，所以这条约束一旦违反就无法自愈。
     function test_ThirdSeatAlsoBlocked() public {
-        uint256 id = game.createGame(2);
+        uint256 id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(a);
@@ -53,7 +53,7 @@ contract OneSeatPerAddressTest is Test {
 
     /// 不同地址仍能正常坐满三席并开局。
     function test_DifferentAddressesStillStart() public {
-        uint256 id = game.createGame(2);
+        uint256 id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b);
@@ -66,8 +66,8 @@ contract OneSeatPerAddressTest is Test {
 
     /// 约束按"局"生效：同一个人可以在不同局里各坐一席（不同 gameId 互不影响）。
     function test_SameAddressAllowedInDifferentGames() public {
-        uint256 id1 = game.createGame(2);
-        uint256 id2 = game.createGame(2);
+        uint256 id1 = game.createGame();
+        uint256 id2 = game.createGame();
         vm.startPrank(a);
         game.join{value: JOIN_VALUE}(id1, 0);
         game.join{value: JOIN_VALUE}(id2, 0);

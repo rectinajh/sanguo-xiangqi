@@ -59,7 +59,9 @@ contract CovenantTest is Test {
     }
 
     function _start() internal returns (uint256 id) {
-        id = game.createGame(2);
+        vm.prank(c);
+        reg.registerAgent("ipfs://agent");
+        id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b);
@@ -67,10 +69,6 @@ contract CovenantTest is Test {
         vm.prank(c);
         game.join{value: JOIN_VALUE}(id, 2);
         game.plantDemoBetrayalHorse(id);
-        // 声誉注册表不再自动注册陌生地址，AI 座位要显式注册，否则
-        // finalizeGame 里的 recordGameResult 会被 catch 吞掉、声誉写不进去。
-        vm.prank(c);
-        reg.registerAgent("ipfs://agent");
     }
 
     function _sigs(bytes32 hash, uint256 k1, uint256 k2) internal view returns (bytes memory sigI, bytes memory sigJ) {

@@ -2,8 +2,8 @@
   "chainId": 10143,
   "rpcUrl": "https://testnet-rpc.monad.xyz",
   "deployer": "0x2467cCc560323C3aF7CC91a17ee9CFF6500dcdA7",
-  "StubVerifier": "0x2e75871c69548cd4eb9bd5141f599a5032163dce",
-  "AgentRegistry": "0x045d56ac5c9705ef5cfdbf63fe1d757ef6af680b",
-  "GameTable": "0x73ba76bd30d27b0e288b1902bda0439fc26888ae",
-  "Covenant": "0xd4734827368352d32300a6be143795c344a9a893"
+  "StubVerifier": "0xc0ff952f5679c877a1bd4cabdf9b2348e3d3b333",
+  "AgentRegistry": "0x9c19c6213dc150c9fe38a20fae0721bd9935c012",
+  "GameTable": "0x808a1e24d13681e4666706d60def28afe21859af",
+  "Covenant": "0x857ff987f28564b7f7b6a58cd421bd4e01ec80b9"
 }

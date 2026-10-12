@@ -77,11 +77,23 @@ export function getWalletClient(account: Account) {
 }
 
 /**
- * 不在客户端上绑定账户的写客户端：签名者由每次调用的 `account` 参数决定。
- * 这样同一套调用既能服务本地临时钥，也能服务浏览器钱包。
+ * 不在客户端上绑定账户的写客户端（仅本地 Account + HTTP）。
+ * 浏览器钱包请用 `getWriteWalletClient(address)`，走 EIP-1193。
  */
 export function getSignerWalletClient() {
   return createWalletClient({ chain: activeChain, transport: http(rpcUrl) });
+}
+
+/**
+ * 按签名者类型选写客户端：
+ * - 本地 `Account`（含临时钥 / Anvil）→ HTTP transport
+ * - 地址字符串（注入式钱包）→ `window.ethereum`（EIP-1193）
+ */
+export function getWriteWalletClient(account: Signer) {
+  if (typeof account === "string") {
+    return getInjectedWalletClient();
+  }
+  return createWalletClient({ account, chain: activeChain, transport: http(rpcUrl) });
 }
 
 /**

@@ -10,6 +10,8 @@ type Props = {
   trustScore?: number;
   slashed?: number;
   forcedBurn?: bigint;
+  /** 结算前读到的奖池（MON wei） */
+  prizePool?: bigint | null;
   /** 当前局号：用来从索引器取"这一局在历史里的位置" */
   gameId?: bigint | null;
   /** 点玩家地址时打开玩家主页 */
@@ -32,6 +34,7 @@ export function EndgameReveal({
   trustScore,
   slashed,
   forcedBurn,
+  prizePool,
   gameId,
   onOpenPlayer,
   onClose,
@@ -100,6 +103,13 @@ export function EndgameReveal({
           <p>
             胜者：
             <strong style={{ color: SEAT_COLOR[winnerSeat] }}> {SEAT_LABEL_ZH[winnerSeat]}</strong>
+          </p>
+        )}
+        {prizePool !== undefined && prizePool !== null && (
+          <p>
+            奖池：
+            <strong style={{ color: "var(--gold)" }}> {formatMon(prizePool)} MON</strong>
+            <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>（胜 70% / 亚 20% / 协议 10%）</span>
           </p>
         )}
         {trustScore !== undefined && (

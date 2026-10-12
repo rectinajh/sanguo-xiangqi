@@ -413,13 +413,7 @@
   {
     "type": "function",
     "name": "createGame",
-    "inputs": [
-      {
-        "name": "aiSeat",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
+    "inputs": [],
     "outputs": [
       {
         "name": "gameId",

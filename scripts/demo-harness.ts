@@ -65,7 +65,15 @@ async function main() {
   const covenant = addresses.Covenant as `0x${string}`;
   const gameId = (await pub.readContract({ address: table, abi: gameAbi, functionName: "nextGameId" })) as bigint;
 
-  await send(deployer, gameAbi, table, "createGame", [2]);
+  // AI 必须先注册：createGame() 不再写 aiSeat，join 时由 AgentRegistry 绑定卧底。
+  const regAbi = JSON.parse(readFileSync(new URL("../frontend/src/abi/AgentRegistry.json", import.meta.url), "utf8"));
+  try {
+    await send(ai, regAbi, addresses.AgentRegistry as `0x${string}`, "registerAgent", ["sanguo://agent/mole-v1"]);
+  } catch {
+    console.log("registerAgent skipped (already registered)");
+  }
+
+  await send(deployer, gameAbi, table, "createGame", []);
   const id = gameId;
   for (const [account, seat] of [
     [humanA, 0],
@@ -79,15 +87,6 @@ async function main() {
   console.log("cheap", formatMon(spine.cheapFee), "chariot", formatMon(spine.chariotFee));
   const who = [humanA, humanB, ai] as const;
   let betrayHash: `0x${string}` | null = null;
-
-  // 协议要求：AI 座位在声誉注册表里有身份，否则 finalize 的声誉写入会被跳过。
-  // 注册表对重复注册会 revert("exists")，所以这里容错处理。
-  const regAbi = JSON.parse(readFileSync(new URL("../frontend/src/abi/AgentRegistry.json", import.meta.url), "utf8"));
-  try {
-    await send(ai, regAbi, addresses.AgentRegistry as `0x${string}`, "registerAgent", ["sanguo://agent/mole-v1"]);
-  } catch {
-    console.log("registerAgent skipped (already registered)");
-  }
 
   for (const m of spine.moves) {
     if (m.tag === "betray") {

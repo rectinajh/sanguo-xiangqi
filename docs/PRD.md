@@ -425,7 +425,7 @@ Commit-reveal：`commitHash = keccak256(abi.encode(seat, from, to, piece, salt))
 
 ### 功能（P0）
 
-- [ ] 部署 Monad Testnet `10143`；地址与示例 tx 可复现
+- [x] 部署 Monad Testnet `10143`；地址与示例 tx 可复现（见 README + `addresses.10143.json`）
 - [ ] 开局 3 座、恰好 1 AI；各座 `seatStake = 1 MON` + `playBalance`
 - [ ] 人类临时钱包；AI 不持用户键；对局无热补油
 - [ ] 合法走子可至终局；合法格显示 `moveFee`

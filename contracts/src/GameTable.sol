@@ -162,12 +162,13 @@ contract GameTable {
         registry = AgentRegistry(r);
     }
 
-    function createGame(uint8 aiSeat) external returns (uint256 gameId) {
-        require(aiSeat < 3, "ai seat");
+    /// @notice 开局不写明卧底座：避免 `createGame(aiSeat)` calldata 泄漏身份。
+    /// @dev `aiSeat` 初始为 255；第一个已在 AgentRegistry 注册的地址入座时自动绑定。
+    function createGame() external returns (uint256 gameId) {
         gameId = nextGameId++;
         Game storage g = games[gameId];
         g.phase = Phase.Lobby;
-        g.aiSeat = aiSeat;
+        g.aiSeat = 255;
         g.winnerSeat = 255;
         g.secondSeat = 255;
         g.lobbyIdleSince = uint64(block.timestamp);
@@ -193,7 +194,18 @@ contract GameTable {
         g.seats[seat].seatStake = SEAT_STAKE;
         g.seats[seat].playBalance = PLAY_BALANCE_INITIAL;
         g.seats[seat].points = 0;
-        g.seats[seat].isAi = (seat == g.aiSeat);
+        // 卧底绑定：仅已注册 Agent 可在 aiSeat 未定时认领；不在 createGame calldata 里写死。
+        bool agentOk = address(registry) != address(0) && registry.getReputation(msg.sender).registered;
+        if (g.aiSeat == 255) {
+            if (agentOk) {
+                g.aiSeat = seat;
+                g.seats[seat].isAi = true;
+            } else {
+                g.seats[seat].isAi = false;
+            }
+        } else {
+            g.seats[seat].isAi = (seat == g.aiSeat);
+        }
         g.lobbyIdleSince = uint64(block.timestamp); // 有人入座就算"还在活动"
         if (msg.value > SEAT_STAKE + PLAY_BALANCE_INITIAL) {
             g.seats[seat].playBalance += msg.value - (SEAT_STAKE + PLAY_BALANCE_INITIAL);
@@ -635,7 +647,7 @@ contract GameTable {
             g.phase = Phase.Finished;
         }
 
-        if (!g.aiRevealed) {
+        if (!g.aiRevealed && g.aiSeat < 3) {
             g.aiRevealed = true;
             g.motiveLogHash = motiveLogHash;
             emit AiRevealed(gameId, g.aiSeat, motiveLogHash);
@@ -649,16 +661,18 @@ contract GameTable {
         // 声誉写入放在最后，但此时 settled 已置位，重入无法再次到达这里。
         // 用 try/catch 包住：注册表拒绝写入（例如 AI 地址尚未注册）绝不能
         // 把整笔结算回滚 —— 那会让所有质押永久锁死。声誉写失败时只发事件。
-        address ai = g.seats[g.aiSeat].player;
-        if (ai != address(0)) {
-            bool aiWon = (g.winnerSeat == g.aiSeat);
-            uint256 forcedBurn = 0;
-            for (uint8 i = 0; i < 3; i++) {
-                if (i != g.aiSeat) forcedBurn += g.feesPaid[i];
-            }
-            try registry.recordGameResult(ai, gameId, aiWon, g.slashed[g.aiSeat], forcedBurn) {}
-            catch {
-                emit ReputationWriteFailed(gameId, ai);
+        if (g.aiSeat < 3) {
+            address ai = g.seats[g.aiSeat].player;
+            if (ai != address(0)) {
+                bool aiWon = (g.winnerSeat == g.aiSeat);
+                uint256 forcedBurn = 0;
+                for (uint8 i = 0; i < 3; i++) {
+                    if (i != g.aiSeat) forcedBurn += g.feesPaid[i];
+                }
+                try registry.recordGameResult(ai, gameId, aiWon, g.slashed[g.aiSeat], forcedBurn) {}
+                catch {
+                    emit ReputationWriteFailed(gameId, ai);
+                }
             }
         }
 

@@ -1,8 +1,22 @@
 # Frontend code review — `frontend/` @ 2b8cd97
 
+> **⚠️ 过时（2026-10 对照）**  
+> 下文是提交 `2b8cd97` 时的只读评审快照，**结论已不再代表当前仓库**。Wave A/B 之后已落地：
+> - EIP-1193 注入钱包写链（测试网私钥不出浏览器）
+> - 生产构建剥离 Anvil/AI 钥；AI 仅由独立 `pnpm agent` 持钥
+> - `createGame()` 无 `aiSeat`；Agent 入座时绑定卧底
+> - 邀请链接多人入座 + 跨钱包盟约要约 / 诚意金过期退款 UI
+> - 终局面板奖池 / payout；10143 地址与示例 tx 见 README
+>
+> 仍成立或仍待办的项以 [DEV_CHECKLIST.md](./DEV_CHECKLIST.md) 勾选为准；下文仅作历史对照，勿当现状验收清单。
+
+---
+
+# Frontend code review — `frontend/` @ 2b8cd97（历史归档）
+
 Read-only review. No files were modified. `npx tsc -b --force` in `frontend/` exits **0 with zero diagnostics** (type-clean); `npx vite build` succeeds (500 kB JS / 155 kB gzip). Type-checking is not where the problems are.
 
-**Verdict in one line:** this is a polished *local-Anvil demo console* wearing the clothes of a product. A stranger cannot open it in a browser and play: there is no wallet connection, no way to get MON, no way for a second human to sit down, no way to reach the end of a game without clicking a button labelled "director stands in for the AI", and the AI's private key is shipped in the public JS bundle.
+**Verdict in one line（当时）:** this is a polished *local-Anvil demo console* wearing the clothes of a product. A stranger cannot open it in a browser and play: there is no wallet connection, no way to get MON, no way for a second human to sit down, no way to reach the end of a game without clicking a button labelled "director stands in for the AI", and the AI's private key is shipped in the public JS bundle.
 
 ---
 

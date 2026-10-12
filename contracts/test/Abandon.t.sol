@@ -38,7 +38,11 @@ contract AbandonTest is Test {
     }
 
     function _lobbyWith(uint8 seats) internal returns (uint256 id) {
-        id = game.createGame(2);
+        if (seats > 2) {
+            vm.prank(c);
+            reg.registerAgent("ipfs://agent");
+        }
+        id = game.createGame();
         if (seats > 0) {
             vm.prank(a);
             game.join{value: JOIN_VALUE}(id, 0);
@@ -213,7 +217,7 @@ contract AbandonTest is Test {
 
     /// 超付的那部分也要退（入座时 msg.value > 3 MON 的差额进了 playBalance）。
     function test_OverpaymentIsRefunded() public {
-        uint256 id = game.createGame(2);
+        uint256 id = game.createGame();
         vm.prank(a);
         game.join{value: JOIN_VALUE + 1 ether}(id, 0);
         uint256 balBefore = a.balance;
