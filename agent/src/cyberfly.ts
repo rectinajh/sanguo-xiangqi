@@ -342,6 +342,35 @@ export async function loadConnectome(cfg: {
   }
 }
 
+/**
+ * 从本地文件加载子网（**首选路径**）。
+ *
+ * 为什么优先本地文件而不是每次打 neuPrint API：
+ *   - 走子决策是热路径，每次开局都发几十次网络请求既慢又不可靠
+ *   - 连接组是**静态解剖结构**，不会变；构建一次就够了
+ *   - 子网构建需要 token，但对局不需要 —— 把凭证依赖限制在构建期
+ *
+ * 文件由 scripts/build-cyberfly-subnet.ts 生成，数据全部来自
+ * Janelia FlyEM MaleCNS v1.0 的真实 ConnectsTo.weight，无编造连接。
+ */
+export async function loadSubnetFromFile(path: string): Promise<ConnectomeSubnet | null> {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const raw = JSON.parse(await readFile(path, "utf8")) as Partial<ConnectomeSubnet> & {
+      stats?: { ntCoverage?: number };
+    };
+    if (!raw.neurons?.length) return null;
+    return {
+      name: raw.name ?? "connectome subnet",
+      source: raw.source ?? "unknown",
+      neurons: raw.neurons,
+      synapses: raw.synapses ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** 合成子网：无条件可用，用于测试与"没有 token 时的可视化占位"。 */
 export function syntheticSubnet(n = 64): ConnectomeSubnet {
   const rand = mulberry32(12345);

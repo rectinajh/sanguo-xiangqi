@@ -32,6 +32,7 @@ import { decideWithKimi, loadKimiConfig, type KimiConfig } from "./kimi.js";
 import {
   drivesToBias,
   loadConnectome,
+  loadSubnetFromFile,
   sensorySeed,
   simulate,
   syntheticSubnet,
@@ -39,6 +40,8 @@ import {
   type SensoryInput,
 } from "./cyberfly.js";
 import { loadAgentEnv } from "./loadEnv.js";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { MotiveLog } from "./motiveLog.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -722,6 +725,20 @@ async function main() {
 
   // 赛博果蝇：连接组是可选的增强，**加载失败绝不能挡住对局**。
   // 没有 NEUPRINT_TOKEN 时不联网、不提示错误，行为与以前完全一致。
+  // 优先本地已构建的子网：连接组是静态解剖结构，构建一次即可；
+  // 走子决策不该依赖外部 API 与凭证。
+  const localPath =
+    process.env.CYBERFLY_SUBNET ?? join(dirname(fileURLToPath(import.meta.url)), "..", "data", "cyberfly-subnet.json");
+  const local = await loadSubnetFromFile(localPath);
+  if (local) {
+    agent.attachConnectome(local);
+    console.log(`赛博果蝇：已接入「${local.name}」（${local.neurons.length} 神经元 / ${local.synapses.length} 突触，本地文件）`);
+    console.log(`  来源：${local.source}`);
+    await agent.run();
+    return;
+  }
+
+  // 没有本地文件时才回落到 neuPrint API（需要 token）
   const token = process.env.NEUPRINT_TOKEN?.trim();
   if (process.env.CYBERFLY_ENABLE === "1" || token) {
     const net = await loadConnectome({
