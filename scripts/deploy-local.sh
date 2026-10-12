@@ -8,6 +8,11 @@
 #        广播。所以这里默认先检查链上是否已有可用部署，有就直接复用。
 #        想强制重来：FORCE_REDEPLOY=1 pnpm deploy:local
 set -euo pipefail
+
+# forge 的 code_size_limit 也约束部署脚本合约自身（Deploy.s.sol 约 39 KB），
+# 而生产合约都远小于此。这里放宽给脚本用；真实链上限制由 Monad 决定
+# （实测允许 ≥50 KB runtime），生产合约尺寸由 `pnpm size` 校验。
+export FOUNDRY_CODE_SIZE_LIMIT="${FOUNDRY_CODE_SIZE_LIMIT:-100000}"
 export PATH="$HOME/.foundry/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/contracts"
@@ -81,7 +86,10 @@ PY
 fi
 
 echo "==> Deploying to $RPC"
-forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC" --broadcast --private-key "$PK" -vv
+# Sanren graph library exceeds EIP-170 24KB; local Anvil allows it via --code-size-limit.
+# Deploy.s.sol 自身 initcode ~52KB，超过默认 EIP-3860（2×24KB）；与 anvil --code-size-limit 对齐放大。
+forge script script/Deploy.s.sol:Deploy --rpc-url "$RPC" --broadcast --private-key "$PK" \
+  --code-size-limit 500000 -vv
 
 SANGUO_CHAIN="$ACTUAL_CHAIN_ID" SANGUO_RPC="$RPC" python3 << 'PY'
 import json, glob, os, sys

@@ -8,6 +8,11 @@
 #   3. 拒绝所有公开已知的 Anvil 测试钥作为部署钥。
 #   4. 绝不覆盖本地演示用的 addresses.json（测试网地址写独立文件）。
 set -euo pipefail
+
+# forge 的 code_size_limit 也约束部署脚本合约自身（Deploy.s.sol 约 39 KB），
+# 而生产合约都远小于此。这里放宽给脚本用；真实链上限制由 Monad 决定
+# （实测允许 ≥50 KB runtime），生产合约尺寸由 `pnpm size` 校验。
+export FOUNDRY_CODE_SIZE_LIMIT="${FOUNDRY_CODE_SIZE_LIMIT:-100000}"
 export PATH="$HOME/.foundry/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/contracts"

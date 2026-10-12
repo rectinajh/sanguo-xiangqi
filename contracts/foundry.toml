@@ -15,6 +15,10 @@ ffi = false
 # （GameTableHarness 等）会超过 24 KB，所以 `forge test` 需要更宽的值。
 # 因此约束由 `forge build --sizes` 与 CI 的 size-check 步骤来保证，
 # 而不是靠一个全局魔法数。
+#
+# ⚠️ 这个值同时约束 `forge script` 部署**脚本合约自身**。Deploy.s.sol 约 39 KB，
+#    因此真实部署必须放宽（见 scripts/deploy-*.sh 里的 FOUNDRY_CODE_SIZE_LIMIT）。
+#    生产合约的尺寸约束由 `pnpm size`（实测 Monad 允许 ≥50 KB runtime）来把。
 code_size_limit = 24_576
 
 # 测试环境单独放宽（给测试辅助合约留空间，不影响上面的真实约束）。

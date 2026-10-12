@@ -1,0 +1,8 @@
+{
+  "chainId": 10143,
+  "rpcUrl": "https://testnet-rpc.monad.xyz",
+  "StubVerifier": "0x6C77A8FF861D4D1f4211272d3A139aaAb15e52F3",
+  "AgentRegistry": "0x92db1C147d4BB108542435213ca8f75bA0400A8D",
+  "GameTable": "0xe6a2760107e4eE4FF6D626E1A843Bda33c2a2a6D",
+  "Covenant": "0x55706cc8845449208E6286C4Af718E597F1c1a1E"
+}
