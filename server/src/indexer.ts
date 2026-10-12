@@ -273,7 +273,12 @@ async function scanOnce(
     if (!snap) continue;
     // 跳过完全空的 id（理论上不该出现，但链上可以被人为制造）
     if (snap.seats.every((s) => !s.occupied)) continue;
-    upsertGame(db, snap);
+    // ⚠️ 必须 await：upsertGame 是 async（内部 await db.run）。
+    //    漏掉 await 时 SQLite 那条路径看起来还是正常的（同步驱动立刻完成），
+    //    但 Postgres 是异步的 —— 写入失败会变成**被静默吞掉的浮动 Promise**，
+    //    日志照常打印"扫描：N 局"、数据库里却一行都没有。这个 bug 实测踩过：
+    //    索引器接上 Supabase 后一直显示扫到对局，/health 却始终是 0。
+    await upsertGame(db, snap);
     updated++;
     for (const s of snap.seats) if (s.occupied) touchedPlayers.add(s.player.toLowerCase());
   }
