@@ -11,6 +11,11 @@ import {AgentRegistry} from "../src/AgentRegistry.sol";
 /// 3 MON 永久卡死（finalizeGame 拒绝处理未开打的局，join 又因座位被占而 revert）。
 /// 这个文件钉住"钱一定能拿回来"这条性质。
 contract AbandonTest is Test {
+    /// @dev 入座费 = 质押 + 作战余额。取自合约常量，调参后测试自动跟随。
+    uint256 constant JOIN_VALUE = 0.05 ether + 0.3 ether;
+    uint256 constant PLAY_INIT = 0.3 ether;
+    uint256 constant STAKE = 0.05 ether;
+
     GameTable game;
     AgentRegistry reg;
     uint256 keyA = 0xA11;
@@ -36,15 +41,15 @@ contract AbandonTest is Test {
         id = game.createGame(2);
         if (seats > 0) {
             vm.prank(a);
-            game.join{value: 3 ether}(id, 0);
+            game.join{value: JOIN_VALUE}(id, 0);
         }
         if (seats > 1) {
             vm.prank(b);
-            game.join{value: 3 ether}(id, 1);
+            game.join{value: JOIN_VALUE}(id, 1);
         }
         if (seats > 2) {
             vm.prank(c);
-            game.join{value: 3 ether}(id, 2);
+            game.join{value: JOIN_VALUE}(id, 2);
         }
     }
 
@@ -61,8 +66,8 @@ contract AbandonTest is Test {
 
         vm.prank(a);
         uint256 got = game.claimAbandonRefund(id);
-        assertEq(got, 3 ether, "refund = stake + play balance");
-        assertEq(a.balance, balBefore + 3 ether, "balance restored");
+        assertEq(got, JOIN_VALUE, "refund = stake + play balance");
+        assertEq(a.balance, balBefore + JOIN_VALUE, "balance restored");
     }
 
     /// 两个人：一个人投票不能卷走另一个人的钱。
@@ -92,8 +97,8 @@ contract AbandonTest is Test {
         game.claimAbandonRefund(id);
         vm.prank(b);
         game.claimAbandonRefund(id);
-        assertEq(a.balance, balA + 3 ether, "a refunded");
-        assertEq(b.balance, balB + 3 ether, "b refunded");
+        assertEq(a.balance, balA + JOIN_VALUE, "a refunded");
+        assertEq(b.balance, balB + JOIN_VALUE, "b refunded");
     }
 
     /// 超时后一个人就能强制放弃 —— 否则一个不来的玩家能永远锁住别人的钱。
@@ -110,7 +115,7 @@ contract AbandonTest is Test {
         // b 没投票也能取回自己的钱
         vm.prank(b);
         uint256 got = game.claimAbandonRefund(id);
-        assertEq(got, 3 ether, "b still refunded");
+        assertEq(got, JOIN_VALUE, "b still refunded");
     }
 
     /// 没超时且没全员同意时，超时判断不能被自己这一票"刷新"掉。
@@ -174,7 +179,7 @@ contract AbandonTest is Test {
 
         vm.prank(b);
         vm.expectRevert(bytes("lobby"));
-        game.join{value: 3 ether}(id, 1);
+        game.join{value: JOIN_VALUE}(id, 1);
 
         vm.prank(a);
         vm.expectRevert(bytes("lobby"));
@@ -210,14 +215,14 @@ contract AbandonTest is Test {
     function test_OverpaymentIsRefunded() public {
         uint256 id = game.createGame(2);
         vm.prank(a);
-        game.join{value: 4 ether}(id, 0);
+        game.join{value: JOIN_VALUE + 1 ether}(id, 0);
         uint256 balBefore = a.balance;
 
         vm.prank(a);
         game.abandonGame(id);
         vm.prank(a);
         uint256 got = game.claimAbandonRefund(id);
-        assertEq(got, 4 ether, "overpayment returned too");
-        assertEq(a.balance, balBefore + 4 ether);
+        assertEq(got, JOIN_VALUE + 1 ether, "overpayment returned too");
+        assertEq(a.balance, balBefore + JOIN_VALUE + 1 ether);
     }
 }

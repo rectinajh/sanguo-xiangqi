@@ -15,8 +15,10 @@
 import { encodeAbiParameters, formatEther, keccak256, type Hex } from "viem";
 import {
   NODE_COUNT,
+  PLAY_BALANCE_INITIAL,
   Piece,
   SEAT_LABEL_ZH,
+  SEAT_STAKE,
   applyMove,
   initialBoard,
   legalMoves,
@@ -261,7 +263,8 @@ class MoleAgent {
 
   /** 我的座位是否已入座；没有就自己入座（需要余额 ≥ JOIN_VALUE）。 */
   private async ensureSeated(gameId: bigint) {
-    const JOIN_VALUE = 3n * 10n ** 18n; // 1 MON 质押 + 2 MON 作战
+    // 入座费由合约常量决定（质押 + 作战）；写成字面量会在调参后失效
+    const JOIN_VALUE = SEAT_STAKE + PLAY_BALANCE_INITIAL;
 
     const mine = (await this.ctx.pub.readContract({
       address: this.cfg.addresses.GameTable,

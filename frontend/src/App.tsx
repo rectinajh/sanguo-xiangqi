@@ -2,14 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BoardState,
   Coord,
+  JOIN_VALUE,
+  PLAY_BALANCE_INITIAL,
   Piece,
-  Seat,
   SEAT_LABEL_ZH,
+  Seat,
+  demoSpine,
+  formatMon,
   initialBoard,
   legalMoves,
-  formatMon,
-  JOIN_VALUE,
-  demoSpine,
   pickAiMove,
   type LegalMove,
 } from "@sanguo/shared";
@@ -1328,7 +1329,7 @@ export default function App() {
         onClose={() => setAllianceOpen(false)}
         onPropose={proposeAlliance}
         busy={busy}
-        isWhale={(seats[mySeat]?.playBalance ?? 0n) >= parseEther("3")}
+        isWhale={(seats[mySeat]?.playBalance ?? 0n) >= PLAY_BALANCE_INITIAL * 3n}
       />
       <EndgameReveal
         open={revealOpen && aiRevealed}

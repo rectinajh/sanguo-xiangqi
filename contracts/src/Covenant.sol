@@ -23,7 +23,11 @@ contract Covenant {
     uint256 public constant EXTRA_EARNEST_PREMIUM = 0.05 ether;
     uint8 public constant BASE_PENDING_EARNEST = 1;
     uint8 public constant WHALE_PENDING_EARNEST = 3;
-    uint256 public constant WHALE_PLAY_BALANCE_THRESHOLD = 3 ether;
+    /// @dev "巨鲸"门槛 = 3 倍开局作战余额。
+    ///      ⚠️ 这个值与 GameTable.PLAY_BALANCE_INITIAL（0.3 ether）**耦合**，
+    ///      同步改。曾写死成 3 ether —— 降参后没有任何玩家能达到，鲸鱼档
+    ///      （可挂 3 个待定诚意金）变成了死代码，测试才把它暴露出来。
+    uint256 public constant WHALE_PLAY_BALANCE_THRESHOLD = 3 * 0.3 ether;
     uint8 public constant BUY_PEACE_DEFAULT_PLIES = 8;
     uint8 public constant MAX_CLAUSES = 8;
 

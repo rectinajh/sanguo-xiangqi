@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { createPublicClient, createWalletClient, defineChain, http, parseEther, keccak256, encodePacked, encodeAbiParameters } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { demoSpine, formatMon } from "@sanguo/shared";
+import { JOIN_VALUE, demoSpine, formatMon } from "@sanguo/shared";
 const root = new URL("..", import.meta.url);
 const addresses = JSON.parse(readFileSync(new URL("../frontend/src/lib/addresses.json", import.meta.url), "utf8"));
 const gameAbi = JSON.parse(readFileSync(new URL("../frontend/src/abi/GameTable.json", import.meta.url), "utf8"));
@@ -72,7 +72,7 @@ async function main() {
     [humanB, 1],
     [ai, 2],
   ] as const) {
-    await send(account, gameAbi, table, "join", [id, seat], parseEther("3"));
+    await send(account, gameAbi, table, "join", [id, seat], JOIN_VALUE);
   }
 
   const spine = demoSpine();

@@ -13,9 +13,19 @@ import {AgentRegistry} from "./AgentRegistry.sol";
 contract GameTable {
     using FeeLib for uint8;
 
-    uint256 public constant SEAT_STAKE = 1 ether;
-    uint256 public constant PLAY_BALANCE_INITIAL = 2 ether;
-    uint256 public constant MIN_PLAY_BALANCE_TO_START = 0.5 ether;
+    // ── 经济参数 ──────────────────────────────────────────────
+    // 设计依据（实测开局 110 种着法的费用分布）：
+    //   最便宜 0.0090 · 平均 0.1027 · 最贵 0.5775 MON
+    //   一局最多 80 手（单人约 27 手）→ 全走便宜着法约 0.243 MON，
+    //   但只要走一手贵的（车/炮长途）就要 0.1~0.58 MON。
+    //
+    // 旧值是质押 1 + 作战 2 = 入座 3 MON，三个座位就是 9 MON —— 对测试网
+    // 玩家门槛太高，而且作战余额 2 MON 让"逼破产"永远不可能发生
+    // （80 手全走最贵也才花 15.6，但没人会那样下）。现在按"约 3 手贵着法
+    // 或 30 手便宜着法就破产"来定，让油费真正成为要经营的资源。
+    uint256 public constant SEAT_STAKE = 0.05 ether;
+    uint256 public constant PLAY_BALANCE_INITIAL = 0.3 ether;
+    uint256 public constant MIN_PLAY_BALANCE_TO_START = 0.05 ether;
     uint256 public constant TIMEOUT_PENALTY = 0.03 ether;
     uint256 public constant ILLEGAL_REVEAL_PENALTY = 0.05 ether;
     uint256 public constant COMMIT_REVEAL_WINDOW = 60;

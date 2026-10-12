@@ -1,10 +1,10 @@
 /** FINAL PRD §4.2 frozen defaults (wei, 18 decimals, MON mock) */
-export const SEAT_STAKE = 10n ** 18n; // 1 MON
-export const PLAY_BALANCE_INITIAL = 2n * 10n ** 18n; // 2 MON
-export const MIN_PLAY_BALANCE_TO_START = 5n * 10n ** 17n; // 0.5 MON
+export const SEAT_STAKE = 5n * 10n ** 16n; // 0.05 MON（与 GameTable.SEAT_STAKE 一致）
+export const PLAY_BALANCE_INITIAL = 3n * 10n ** 17n; // 0.3 MON
+export const MIN_PLAY_BALANCE_TO_START = 5n * 10n ** 16n; // 0.05 MON
 export const MIN_AGENT_STAKE = 10n ** 18n;
 export const FAUCET_PER_HUMAN = 32n * 10n ** 17n; // 3.2 MON
-export const JOIN_VALUE = SEAT_STAKE + PLAY_BALANCE_INITIAL; // 3 MON
+export const JOIN_VALUE = SEAT_STAKE + PLAY_BALANCE_INITIAL; // 0.35 MON
 
 export const BASE_FEE = 10n ** 16n; // 0.010 MON
 export const DIST_UNIT = 5n * 10n ** 15n; // 0.005 MON
@@ -33,8 +33,11 @@ export const RUMOR_PRICE = 5n * 10n ** 16n;
 export const ACCUSE_STAKE = 10n ** 17n;
 export const ACCUSE_SLASH_ON_AI = 4n * 10n ** 17n;
 
+/** @deprecated 旧 11×11；新地图用 NODE_COUNT */
 export const BOARD_W = 11;
 export const BOARD_H = 11;
+/** 三人象棋落点数（与 sanrenMap 一致） */
+export const NODE_COUNT = 139;
 
 export const CLAUSE_NO_CAPTURE_ADVISOR = 1;
 export const CLAUSE_NO_EXPOSE_BEFORE_END = 2;

@@ -5,6 +5,11 @@ import {GameTable} from "../src/GameTable.sol";
 import {AgentRegistry} from "../src/AgentRegistry.sol";
 
 contract DepositTest is Test {
+    /// @dev 入座费 = 质押 + 作战余额。取自合约常量，调参后测试自动跟随。
+    uint256 constant JOIN_VALUE = 0.05 ether + 0.3 ether;
+    uint256 constant PLAY_INIT = 0.3 ether;
+    uint256 constant STAKE = 0.05 ether;
+
     GameTable game;
     AgentRegistry reg;
     address a = address(0xA11);
@@ -22,14 +27,14 @@ contract DepositTest is Test {
 
     function test_HumanDepositOk_AiBlocked() public {
         uint256 id = game.createGame(2);
-        vm.prank(a); game.join{value: 3 ether}(id, 0);
-        vm.prank(b); game.join{value: 3 ether}(id, 1);
-        vm.prank(cAi); game.join{value: 3 ether}(id, 2);
+        vm.prank(a); game.join{value: JOIN_VALUE}(id, 0);
+        vm.prank(b); game.join{value: JOIN_VALUE}(id, 1);
+        vm.prank(cAi); game.join{value: JOIN_VALUE}(id, 2);
 
         vm.prank(a);
         game.depositPlayBalance{value: 1 ether}(id, 0);
         (,, uint256 play,,) = game.getSeat(id, 0);
-        assertEq(play, 3 ether);
+        assertEq(play, PLAY_INIT + 1 ether);
 
         vm.prank(cAi);
         vm.expectRevert(bytes("ai no topup"));

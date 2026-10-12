@@ -9,7 +9,7 @@ import {
 import gameAbi from "../abi/GameTable.json";
 import covAbi from "../abi/Covenant.json";
 import regAbi from "../abi/AgentRegistry.json";
-import { NODE_COUNT, Piece, type BoardState, type Seat } from "@sanguo/shared";
+import { JOIN_VALUE, NODE_COUNT, Piece, type BoardState, type Seat } from "@sanguo/shared";
 import { addresses, getPublicClient, getWalletClient, getSignerWalletClient, type Signer } from "./chain";
 export const gameTableAbi = gameAbi as any;
 export const covenantAbi = covAbi as any;
@@ -202,7 +202,7 @@ export async function createGame(account: Signer, aiSeat: number) {
   return next - 1n;
 }
 
-export async function joinGame(account: Signer, gameId: bigint, seat: number, value = parseEther("3")) {
+export async function joinGame(account: Signer, gameId: bigint, seat: number, value = JOIN_VALUE) {
   const wallet = getSignerWalletClient();
   const pub = getPublicClient();
   const hash = await wallet.writeContract({

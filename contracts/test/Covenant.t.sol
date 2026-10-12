@@ -27,6 +27,11 @@ contract GameTableHarness is GameTable {
 }
 
 contract CovenantTest is Test {
+    /// @dev 入座费 = 质押 + 作战余额。取自合约常量，调参后测试自动跟随。
+    uint256 constant JOIN_VALUE = 0.05 ether + 0.3 ether;
+    uint256 constant PLAY_INIT = 0.3 ether;
+    uint256 constant STAKE = 0.05 ether;
+
     Covenant cov;
     GameTableHarness game;
     AgentRegistry reg;
@@ -59,11 +64,11 @@ contract CovenantTest is Test {
     function _start() internal returns (uint256 id) {
         id = game.createGame(2);
         vm.prank(a);
-        game.join{value: 3 ether}(id, 0);
+        game.join{value: JOIN_VALUE}(id, 0);
         vm.prank(b);
-        game.join{value: 3 ether}(id, 1);
+        game.join{value: JOIN_VALUE}(id, 1);
         vm.prank(c);
-        game.join{value: 3 ether}(id, 2);
+        game.join{value: JOIN_VALUE}(id, 2);
         game.plantDemoBetrayalHorse(id);
         // 声誉注册表不再自动注册陌生地址，AI 座位要显式注册，否则
         // finalizeGame 里的 recordGameResult 会被 catch 吞掉、声誉写不进去。
@@ -186,8 +191,8 @@ contract CovenantTest is Test {
         assertEq(playAfter, playBefore + 0.3 ether);
         assertTrue(game.seatWasSlashed(id, sj));
 
-        game.directorDrain(id, 1, 5 ether);
-        game.directorDrain(id, 2, 5 ether);
+        game.directorDrain(id, 1, PLAY_INIT);
+        game.directorDrain(id, 2, PLAY_INIT);
         game.finalizeGame(id, keccak256("motive"));
 
         uint256 forced = game.feesPaidOf(id, 0) + game.feesPaidOf(id, 1);
@@ -216,9 +221,13 @@ contract CovenantTest is Test {
 
     function test_WhaleMultiPendingEarnest() public {
         uint256 id = _start();
-        vm.prank(a);
-        game.depositPlayBalance{value: 1.5 ether}(id, 0);
+        // 存到超过鲸鱼门槛（= 3 倍开局作战余额），才能挂 3 个待定诚意金。
+        // ⚠️ 顺序：必须先进 prank 再存款 —— 之前把 deposit 写在 startPrank 之前，
+        //    msg.sender 是测试合约本身，会 revert "not you"。
         vm.startPrank(a);
+        uint256 bal = cov.WHALE_PLAY_BALANCE_THRESHOLD();
+        (, , uint256 play, , ) = game.getSeat(id, 0);
+        if (play < bal) game.depositPlayBalance{value: bal - play}(id, 0);
         cov.lockEarnest{value: 0.1 ether}(id, keccak256("a"), 0);
         cov.lockEarnest{value: 0.15 ether}(id, keccak256("b"), 0);
         cov.lockEarnest{value: 0.15 ether}(id, keccak256("c"), 0);
