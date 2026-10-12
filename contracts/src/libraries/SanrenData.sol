@@ -861,12 +861,9 @@ library SanrenData {
     /// @dev 相邻 = 同一条线上且位次相差 1。
     ///      本图里"相邻"与"同线且位次相邻"等价（过渡区与中宫的连线也建成了线），
     ///      因此不再需要 139×139 的邻接位图，省下约 2.4 KB 常量和一次内存拷贝。
-    function isAdj(uint8 x, uint8 y) internal pure returns (bool) {
-        if (x >= NODE_COUNT || y >= NODE_COUNT) return false;
-        (bool ok, , uint8 ra, uint8 rb) = sharedLine(x, y);
-        if (!ok) return false;
-        uint8 d = ra > rb ? ra - rb : rb - ra;
-        return d == 1;
+    function isAdj(uint8 x, uint8 y) public pure returns (bool) {
+        // 相邻 == 同线且位次相差 1。直接复用 lineStep，避免 sharedLine 再内联一份。
+        return lineStep(x, y) == 1;
     }
 
     // ── 同线关系 ──────────────────────────────────────────────
@@ -875,7 +872,7 @@ library SanrenData {
     ///      只看第一条会让 lineStep 在 929 个节点对上算错，从而让车/炮的
     ///      合法性与费用全错。
     function sharedLine(uint8 a, uint8 b)
-        internal
+        public
         pure
         returns (bool ok, uint8 li, uint8 ra, uint8 rb)
     {
@@ -896,7 +893,7 @@ library SanrenData {
         return (false, 0, 0, 0);
     }
 
-    function lineStep(uint8 a, uint8 b) internal pure returns (uint8) {
+    function lineStep(uint8 a, uint8 b) public pure returns (uint8) {
         if (a == b) return 0;
         (bool ok, , uint8 ra, uint8 rb) = sharedLine(a, b);
         if (!ok) return 0;
@@ -904,7 +901,7 @@ library SanrenData {
     }
 
     /// @notice 同线上两点之间（不含端点）的棋子数；不在同线返回 -1。
-    function countBetween(uint8 a, uint8 b, uint8[160] storage board) internal view returns (int8) {
+    function countBetween(uint8 a, uint8 b, uint8[160] storage board) public view returns (int8) {
         (bool ok, uint8 li, uint8 ra, uint8 rb) = sharedLine(a, b);
         if (!ok || ra == rb) return -1;
         uint8 lo = ra < rb ? ra : rb;
