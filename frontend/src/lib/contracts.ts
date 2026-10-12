@@ -313,6 +313,44 @@ export async function commitAndReveal(
   return { commit: hashes, reveal: hashes, salt };
 }
 
+/**
+ * 当前行棋方是否留了一个可以清掉的过期 commit。
+ *
+ * `expireCommit` 是无需许可的 —— 有人 commit 后跑路会把整局锁死，
+ * 所以任何人都能在他超时后把这步作废、推进回合。这个只读入口
+ * 用来决定要不要给用户显示"清掉卡住的一步"按钮。
+ */
+export async function pendingCommitOf(gameId: bigint): Promise<{
+  pending: boolean;
+  committedAt: number;
+  remaining: number;
+}> {
+  const pub = getPublicClient();
+  const [pending, committedAt, remaining] = (await pub.readContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "pendingCommitOf",
+    args: [gameId],
+  })) as readonly [boolean, bigint, bigint];
+  return { pending, committedAt: Number(committedAt), remaining: Number(remaining) };
+}
+
+/** 清掉当前行棋方超时未揭示的 commit（任何人可调用），并推进回合。 */
+export async function expireCommit(account: Signer, gameId: bigint) {
+  const wallet = getSignerWalletClient();
+  const pub = getPublicClient();
+  const hash = await wallet.writeContract({
+    address: gameAddress(),
+    abi: gameTableAbi,
+    functionName: "expireCommit",
+    args: [gameId],
+    account,
+    chain: wallet.chain,
+  });
+  await pub.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
 export async function readSeat(gameId: bigint, seat: number) {
   const pub = getPublicClient();
   const r = (await pub.readContract({

@@ -407,6 +407,26 @@ contract GameTable {
         emit MoveCommitted(gameId, seat, commitHash);
     }
 
+    /// @notice 查询"当前行棋方是否留了一个可以清掉的过期 commit"。
+    ///
+    /// @dev 为什么需要它：`expireCommit` 是**无需许可**的（任何人都能关掉卡住的
+    ///      commit，防止某人 commit 后跑路把整局锁死），但前端需要一个办法知道
+    ///      "现在能不能点这个按钮"。`commits` 是 internal，没有公开 getter，
+    ///      所以补这一个只读入口。返回 remaining = 还要等多少秒（0 表示现在就能清）。
+    function pendingCommitOf(uint256 gameId)
+        external
+        view
+        returns (bool pending, uint64 committedAt, uint256 remaining)
+    {
+        Game storage g = games[gameId];
+        if (g.phase != Phase.Playing) return (false, 0, 0);
+        PendingCommit storage pc = g.commits[g.turn];
+        if (pc.commitHash == bytes32(0)) return (false, 0, 0);
+        uint256 unlockAt = uint256(pc.commitTime) + COMMIT_REVEAL_WINDOW;
+        remaining = block.timestamp >= unlockAt ? 0 : unlockAt - block.timestamp;
+        return (true, pc.commitTime, remaining);
+    }
+
     /// @notice 一次交易完成"提交 + 揭示"，用户只需签一次名。
     ///
     /// @dev 为什么可以这么做：`revealMove` 本来就要求 `g.turn == seat`，

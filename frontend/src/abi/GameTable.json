@@ -759,6 +759,35 @@
   },
   {
     "type": "function",
+    "name": "pendingCommitOf",
+    "inputs": [
+      {
+        "name": "gameId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pending",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "committedAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "remaining",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "previewMoveFee",
     "inputs": [
       {

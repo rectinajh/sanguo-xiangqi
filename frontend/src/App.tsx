@@ -54,6 +54,8 @@ import {
   abandonGame,
   claimAbandonRefund,
   abandonStatusOf,
+  pendingCommitOf,
+  expireCommit,
   commitAndReveal,
   readSeat,
   readMeta,
@@ -176,6 +178,8 @@ export default function App() {
   const [inviteCopied, setInviteCopied] = useState(false);
   /** 水龙头状态（服务端是否可达 + 剩余可发次数） */
   const [myBalance, setMyBalance] = useState<bigint | null>(null);
+  /** 当前行棋方是否有卡住的 commit（用来决定要不要显示"清掉"按钮） */
+  const [stuck, setStuck] = useState<{ pending: boolean; remaining: number } | null>(null);
   /** 新手指引：首次访问自动弹一次 */
   const [howToOpen, setHowToOpen] = useState(() => !hasSeenHowTo());
   /** 放弃投票状态（合约里每个座要投票，或等超时） */
@@ -405,6 +409,13 @@ export default function App() {
           } catch {
             setAbandonInfo(null);
           }
+          // 谁留了个没揭示的 commit？超时后任何人可以清掉（否则整局卡死）
+          try {
+            const pc = await pendingCommitOf(id);
+            setStuck(pc.pending ? { pending: true, remaining: pc.remaining } : null);
+          } catch {
+            setStuck(null);
+          }
         }
       } catch {
         /* 轮询失败静默重试，不打扰用户 */
@@ -495,6 +506,27 @@ export default function App() {
       toast("已取回", "质押与作战余额已退回你的钱包");
     } catch (e: unknown) {
       toast("取回失败", friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 清掉当前行棋方超时未揭示的 commit。
+   *
+   * 这是**无需许可**的操作：有人 commit 后跑路会把整局锁死，所以合约允许
+   * 任何人在超时后作废这一步并推进回合。前端之前没有入口，导致卡住就只能干等。
+   */
+  async function onExpireStuck() {
+    if (!walletAddress || gameId === null) return;
+    setBusy(true);
+    try {
+      await expireCommit(walletAddress, gameId);
+      await refreshRef.current?.(gameId, true);
+      setStuck(null);
+      toast("已清掉卡住的一步", "对方超时未揭示，回合已推进");
+    } catch (e: unknown) {
+      toast("清理失败", friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -1074,6 +1106,36 @@ export default function App() {
             eliminated={eliminatedMap}
             seatedCount={seatedCount}
           />
+          {/* 有人 commit 后跑路：超时后任何人都能清掉这一步，否则整局卡死 */}
+          {phase === 1 && stuck?.pending && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                padding: "8px 10px",
+                marginBottom: 8,
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "var(--panel2)",
+              }}
+            >
+              <span style={{ fontSize: "0.82rem" }}>
+                {stuck.remaining > 0
+                  ? `对方已提交但还没揭示，${stuck.remaining} 秒后可清掉这一步`
+                  : "对方超时未揭示 —— 现在可以清掉这一步，让对局继续"}
+              </span>
+              <button
+                className="secondary"
+                style={{ marginLeft: "auto", padding: "0.35rem 0.7rem", fontSize: "0.78rem" }}
+                disabled={busy || stuck.remaining > 0}
+                onClick={onExpireStuck}
+              >
+                清掉卡住的一步
+              </button>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
             <h2 style={{ margin: 0 }}>棋盘 · 合法格才可点</h2>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
