@@ -20,7 +20,9 @@
     "indexer:once": "pnpm --filter server indexer:once",
     "size": "bash scripts/check-size.sh",
     "postinstall": "pnpm build:shared",
-    "test:agent": "pnpm --filter agent test"
+    "test:agent": "pnpm --filter agent test",
+    "ci:check-install": "pnpm install --frozen-lockfile",
+    "ci": "pnpm ci:check-install && pnpm build:shared && pnpm typecheck && pnpm test:shared && pnpm --filter frontend test && pnpm --filter frontend build && pnpm test:forge && pnpm size"
   },
   "packageManager": "pnpm@10.33.4",
   "devDependencies": {

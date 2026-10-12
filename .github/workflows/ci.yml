@@ -39,6 +39,9 @@ jobs:
       - name: Unit tests (frontend)
         run: pnpm --filter frontend test
 
+      - name: Unit tests (cyberfly / agent)
+        run: pnpm test:agent
+
       - name: Frontend production build
         run: pnpm --filter frontend build
 
