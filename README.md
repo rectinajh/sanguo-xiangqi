@@ -480,6 +480,9 @@ JSON source, schema validation, and real-browser checks, not hand-drawn images.
 Each is a self-contained HTML file. Open it directly — no install, no server. Sources live
 in `.archify/`, so any diagram can be revised without redrawing it.
 
+The images above are cropped to the **diagram body only** — no viewer chrome, no legend, no
+commentary cards. The interactive versions keep all of that if you want it.
+
 ---
 
 ## License & Attribution
