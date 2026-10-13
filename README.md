@@ -37,8 +37,6 @@ advancing**, and once you are through, the only way on is the inward spoke towar
 central palace. Two players can be standing on adjacent nodes with no legal move between
 them.
 
-![The seat ledger](docs/diagrams/seat-ledger.png)
-
 The seat panel is a **dual ledger**: *play balance* is fuel — burned on every move, gone from
 the system — while *seat stake* is collateral, returned or seized at settlement. (The capture
 shows the pre-game state, all three seats still unoccupied.)
