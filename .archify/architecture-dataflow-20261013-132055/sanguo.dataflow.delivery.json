@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "f89311ae-d44e-49cb-b25a-6543972241db",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-dataflow-20261013-132055/candidate.json",
+  "output": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-dataflow-20261013-132055/sanguo.dataflow.html",
+  "specification": {
+    "sha256": "c001207878f4cc413dcbefe9da4303b8aece8a586c04fe6446253ecc592bb0b9",
+    "bytes": 4975
+  },
+  "artifact": {
+    "sha256": "fad301a1d4f11a822feab63aa56a3e7875e4a38a1cbeffafdd5d9984abea887e",
+    "bytes": 757689
+  }
+}

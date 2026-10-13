@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "数据流 · 唯一的权威状态与它的可重建镜像",
+    "output": ".archify/architecture-dataflow-20261013-132055/sanguo.dataflow.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": {
+      "url": "https://github.com/rectinajh/sanguo-xiangqi.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "5fbe2f692ff2f5a452ea588f3a6fd3119698e8e2"
+    }
+  },
+  "components": [
+    {
+      "id": "authors",
+      "type": "external",
+      "label": "出招方",
+      "sublabel": "玩家钱包 / AI 卧底密钥",
+      "pos": [
+        60,
+        60
+      ],
+      "size": [
+        190,
+        80
+      ]
+    },
+    {
+      "id": "commit",
+      "type": "frontend",
+      "label": "commitAndReveal",
+      "sublabel": "承诺与明文同一笔交易",
+      "pos": [
+        330,
+        60
+      ],
+      "size": [
+        210,
+        80
+      ],
+      "sources": [
+        {
+          "path": "frontend/src/lib/contracts.ts",
+          "line": 289,
+          "label": "客户端封装"
+        }
+      ]
+    },
+    {
+      "id": "authority",
+      "type": "backend",
+      "label": "链上权威状态",
+      "sublabel": "GameTable · board / seats / ply / points",
+      "pos": [
+        620,
+        60
+      ],
+      "size": [
+        240,
+        80
+      ],
+      "sources": [
+        {
+          "path": "contracts/src/GameTable.sol",
+          "line": 489,
+          "label": "唯一写入点"
+        }
+      ]
+    },
+    {
+      "id": "derived",
+      "type": "security",
+      "label": "派生的写",
+      "sublabel": "Covenant 罚没 · 声誉更新",
+      "pos": [
+        980,
+        60
+      ],
+      "size": [
+        200,
+        80
+      ],
+      "sources": [
+        {
+          "path": "contracts/src/Covenant.sol",
+          "line": 396,
+          "label": "challengeBetrayal"
+        },
+        {
+          "path": "contracts/src/AgentRegistry.sol",
+          "line": 59,
+          "label": "registerAgent"
+        }
+      ]
+    },
+    {
+      "id": "mirror",
+      "type": "database",
+      "label": "只读镜像",
+      "sublabel": "索引器 → Supabase",
+      "pos": [
+        620,
+        300
+      ],
+      "size": [
+        240,
+        80
+      ],
+      "sources": [
+        {
+          "path": "server/src/indexer.ts",
+          "line": 130,
+          "label": "分片扫描"
+        },
+        {
+          "path": "server/src/store.ts",
+          "line": 49,
+          "label": "PgStore"
+        }
+      ]
+    },
+    {
+      "id": "readers",
+      "type": "frontend",
+      "label": "读侧",
+      "sublabel": "排行榜 / 历史 / 战绩",
+      "pos": [
+        330,
+        300
+      ],
+      "size": [
+        190,
+        80
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "链上（唯一权威，不可重建）",
+      "wraps": [
+        "authority",
+        "derived"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "链下（可随时删掉重扫）",
+      "wraps": [
+        "mirror",
+        "readers"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "from": "authors",
+      "to": "commit",
+      "label": "选点 / 选着法",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c2",
+      "from": "commit",
+      "to": "authority",
+      "label": "唯一写入路径",
+      "variant": "emphasis"
+    },
+    {
+      "id": "c3",
+      "from": "authority",
+      "to": "derived",
+      "label": "背刺罚没 / 声誉"
+    },
+    {
+      "id": "c4",
+      "from": "authority",
+      "to": "mirror",
+      "label": "事件 → eth_getLogs → upsert",
+      "variant": "dashed"
+    },
+    {
+      "id": "c5",
+      "from": "mirror",
+      "to": "readers",
+      "label": "GET /leaderboard",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "权威与镜像的边界",
+      "items": [
+        "链上合约为唯一权威状态，没有任何服务持有它的副本",
+        "所有写入只经过 commitAndReveal 一个入口",
+        "镜像可以随时删掉重扫 —— 不丢任何事实，只丢时间"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "镜像必须记住自己从哪来",
+      "items": [
+        "合约重新部署后地址就变，而 gameId 从 1 重来",
+        "镜像若不记录来源合约，旧部署的对局会永远留在榜上",
+        "实测症状：链上座位全空，前端却说「坐了一个人」",
+        "所以 games 表带 contract 列，读接口按当前合约过滤"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "扫描为什么是分片的",
+      "items": [
+        "Monad 公共 RPC 限制 eth_getLogs 只能查 100 个块",
+        "索引器自适应分片，而不是假设大区间可用",
+        "扫描游标存在 meta 表，重启不会从头再来"
+      ]
+    }
+  ]
+}

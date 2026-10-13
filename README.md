@@ -196,10 +196,16 @@ unblocks `finalizeGame` — the other two are not forced to grind out the remain
 
 ### Data flow
 
-The chain is the only source of truth; everything else is a rebuildable mirror. The
-architecture diagram's cards cover the two traps we hit: `eth_getLogs` is capped at 100
-blocks on Monad's public RPC, and a mirror without provenance accumulates ghost games after
-every redeploy.
+**Interactive diagram:** [`docs/diagrams/dataflow.html`](docs/diagrams/dataflow.html)
+
+The chain is the only source of truth; everything below the boundary is a mirror you can
+delete and rescan without losing a single fact. That boundary is the whole reason the
+indexer exists: there is no on-chain "list all games", so history is reconstructed from
+events rather than stored.
+
+Two traps are called out on the diagram, both of which cost us real debugging time:
+`eth_getLogs` is capped at **100 blocks** on Monad's public RPC, and a mirror without
+provenance accumulates **ghost games** after every contract redeploy.
 
 ### Demo workflow
 
@@ -321,6 +327,7 @@ JSON source, schema validation, and real-browser checks, not hand-drawn images.
 | Diagram | File |
 |---|---|
 | Runtime architecture | [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html) |
+| Data flow (authority vs. mirror) | [`docs/diagrams/dataflow.html`](docs/diagrams/dataflow.html) |
 | Single-transaction move (sequence) | [`docs/diagrams/sequence.html`](docs/diagrams/sequence.html) |
 | Three-minute demo (workflow) | [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) |
 
