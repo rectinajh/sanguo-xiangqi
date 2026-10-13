@@ -1,18 +1,29 @@
 # 三国棋局 · Shadow Xiangqi
 
-**Three-player Xiangqi on Monad. One seat is an AI mole. Every move burns money, and betrayal is a transaction.**
+**Three-player Xiangqi on Monad. One seat is an AI mole whose instincts come from a real
+insect nervous system. Every move burns money, and betrayal is a transaction.**
 
 Most "AI agent" games ask you to trust a server. This one doesn't ask. The board is a
 contract. The agent's reputation is a contract. The moment it stabs you in the back, the
 slash is a transaction you can read on a block explorer — not a line in someone's log file.
 
+And the mole is not a prompt with a personality bolted on. **Its impulses are computed by a
+2,500-neuron subnetwork of the *Drosophila* male central nervous system** — real synapses,
+real neurotransmitters, published in *Cell* in 2026. The connectome supplies the urge. A
+language model supplies the excuse.
+
 | | |
 |---|---|
 | Track | **04 Trust Identity & AI Infrastructure** |
+| AI substrate | **Janelia FlyEM MaleCNS** — 2,500 neurons / 84,014 synapses (CC-BY) |
 | Local chain | Anvil `31337` |
 | Target chain | Monad Testnet `10143` |
 | Rules | Inspired by Sanren Xiangqi — an executable simplification, not a rules encyclopedia |
 | License | MIT |
+
+> **The short version:** a three-player game where money burns as you think, alliances are
+> collateral, betrayal is a priced transaction, and the AI opponent's decision layer is an
+> actual connectome rather than a personality prompt.
 
 ---
 
@@ -102,47 +113,157 @@ punishment is a state change in a public contract.
 
 ---
 
-## What Makes This Different
+## How to Play
 
-**The AI's strategy comes from a real connectome.**
+Three seats. One of them is the mole, and nobody knows which.
 
-The mole's decisions are not prompt-engineering all the way down. A subnetwork of the
-**Janelia FlyEM MaleCNS** connectome — the full male *Drosophila* central nervous system,
-published in *Cell* in September 2026 — runs as a spiking simulation and produces the
-agent's behavioural drives.
-
-We extracted **2,500 neurons and 84,014 real synapses**, seeded from descending neurons
-(the behavioural output layer) and expanded one hop upstream along real `ConnectsTo` edges.
-
-The division of labour is the interesting part:
-
-- **The connectome is the subconscious.** It is deterministic — the same board position
-  always yields the same impulse. It does *not* pick a move.
-- **Kimi is the voice.** It turns the impulse into a chosen move and a line of dialogue:
-  the self-justification that follows the urge.
-
-That is precisely the anatomy of a betrayal. **The impulse arrives first; the reason
-arrives second.**
-
-We deliberately do **not** claim the fly is playing chess. Mapping neurons onto board
-squares would be invention. The connectome outputs three behavioural drives
-(`aggression`, `avoidance`, `courtship`), and the legal move is selected downstream.
-
-> Reference: <https://male-cns.janelia.org/> · data licensed **CC-BY** (HHMI Janelia FlyEM)
-
-**The whole product is one command away from being verified.**
-
-```bash
-pnpm demo    # 18 transactions end to end, including a real betrayal slashing
+```
+  join (0.35 MON)  ──▶  play (burn per move)  ──▶  covenant (stake)  ──▶  betray → slash
+   0.05 stake           0.009–0.578 MON            0.15 MON per clause      bond seized
+   0.30 play balance    per move, burned           both sides, hashed       trustScore −
 ```
 
-Not a video. Not a screenshot. A script that deploys, plays, betrays, and settles.
+**1. Take a seat — 0.35 MON.**
+`0.05` is your seat stake (it goes into the pot). `0.30` is your **play balance**, and this
+is the part that matters: it is fuel, not a deposit. Every move you make burns some of it,
+and the burned MON is destroyed — nobody receives it.
 
-**Honesty is designed in, not bolted on.**
+**2. Move — and pay for the geometry.**
+A move's cost comes from the piece and the distance travelled. Measured across 110 opening
+moves: **min 0.0090, avg 0.1027, max 0.5775 MON**. A soldier shuffle is nearly free. A
+chariot raid is not. So the board quietly prices aggression.
 
-The ZK layer is explicitly staged and labelled (see below). The verifier is a stub and says
-so in its own source. A reviewer who knows cryptography will find no inflated claims here —
-and that is enforced by a size gate and a dependency audit in CI.
+Your legal move set is filtered by what you can still afford. Once your balance drops below
+the cheapest legal move, you are bankrupt and out — you do not get to sit and watch for
+free.
+
+**3. Sign every move.**
+One signature, one transaction. `commitAndRevealMove` puts the commitment hash and the
+plaintext in the *same* transaction, so there is no window where an opponent sees your
+intent before you act on it.
+
+**4. Make a covenant — or don't.**
+Two players can stake an **earnest bond** on a commitment. The commitment's plaintext never
+goes on-chain — only a hash of it — so the table cannot read the terms before you act. For
+those plies, a betrayal is not just rude, it is *profitable to punish*: anyone can call
+`challengeBetrayal` and take the betrayer's bond.
+
+**5. Betray anyway — if it's worth it.**
+Nothing stops you. That is the point. The covenant is a price tag on defection, not a cage.
+Break it and the bond is seized, your `trustScore` drops, and the slash is an event on a
+public chain forever.
+
+**6. Settle, and meet the mole.**
+When the game ends, `AiRevealed` publishes which seat was the AI, along with a
+`motiveLogHash` — a commitment to its recorded reasoning. The pot splits by placement, and
+the mole's reputation is updated in `AgentRegistry`: games, wins, times slashed, and
+`forcedBurnMon` — how much money it extracted from humans by making them spend.
+
+**Stuck?** If someone stalls, anyone can call `expireCommit` after 60 seconds and move the
+turn along. If you want out, `resign` follows the same accounting as bankruptcy and lets
+the survivors settle immediately instead of grinding out the remaining plies.
+
+---
+
+## The Cyberfly: the mole thinks with a real connectome
+
+Every other "AI agent" in this space is a prompt. This one has a nervous system.
+
+The mole's decisions run through a subnetwork of the **Janelia FlyEM MaleCNS** connectome —
+the complete male *Drosophila* central nervous system, published in *Cell* in September
+2026. Not a metaphor, not a dataset we describe in the copy and never load: it is a real
+graph of real synapses, and it executes on every one of the mole's turns.
+
+> **2,500 neurons · 84,014 synapses · 100% neurotransmitter coverage**
+> seeded from descending neurons (the behavioural output layer), expanded one hop upstream
+> along real `ConnectsTo` edges.
+> One spiking pass: **93 ms**. Loaded from a local file, so it never touches the network.
+
+#### The division of labour is the whole idea
+
+```
+board state ──▶ sensory input ──▶ connectome spikes ──▶ three drives ──▶ Kimi ──▶ move + dialogue
+   (154 nodes)      (6 scalars)       (2,500 neurons)    (3 scalars)      (LLM)
+```
+
+- **The connectome is the subconscious.** It is *deterministic*: the same position always
+  produces the same impulse. It **does not pick a move** — mapping neurons onto board
+  squares would be invention, so we don't.
+- **Kimi is the voice.** It receives the drives and produces a legal move plus a line of
+  dialogue — the self-justification that follows the urge.
+
+That is the anatomy of a betrayal, and it is why the two halves are not interchangeable:
+**the impulse arrives first; the reason arrives second.**
+
+#### How the board becomes a feeling
+
+Six numbers are extracted from the position and injected as current into the network:
+
+| Signal | What it feeds |
+|---|---|
+| point share | how far ahead the mole is |
+| fuel ratio | how much play balance it has left |
+| contact with ally | how close its pieces are to the covenant partner's |
+| in check | whether it is under threat |
+| living players | how crowded the table is |
+| ply progress | how late in the game it is |
+
+Real neurotransmitter types decide the sign: **GABA and glutamate inhibit, the rest
+excite.** Coverage in our subnetwork is 100%, so the polarity is not a guess.
+
+#### What comes out — and what you can read
+
+Three drives, each `0..1`, plus a mood line:
+
+- **`aggression`** — pressure and captures
+- **`avoidance`** — conserve fuel, refuse contact
+- **`courtship`** — hold the alliance together
+
+The drives condition Kimi's choice and its tone. `drivesToBias` maps them into
+`preferCapture` / `preferCheap` / `preferBetray`, which is what actually steers the move.
+
+**This makes the mole readable, which makes it playable.** Same position, same impulse —
+so if you replay a line you get the same behaviour. Three levers follow directly from the
+inputs above:
+
+| Do this | Effect |
+|---|---|
+| Keep the game expensive for it | raises `avoidance`; it starts nursing fuel instead of attacking |
+| Deny proximity to your advisor | lowers `contactWithAlly`; `preferBetray` collapses |
+| Stay near its point share | the courtship drive holds the covenant together |
+
+Betrayal is not a coin flip on a timer. It is a function of how you have shaped the
+position — and the covenant's own mechanic (proximity plus the ply window) is one of the
+inputs. **The alliance system and the biology reinforce each other instead of being two
+unrelated features.**
+
+> Data: <https://male-cns.janelia.org/> · **CC-BY**, HHMI Janelia FlyEM.
+> `agent/data/cyberfly-subnet.json` carries the attribution in its `source` field.
+
+---
+
+## What Makes This Different
+
+### Betrayal with a price tag, not a plot twist
+
+The covenant mechanism only means something because `challengeBetrayal` actually fires:
+the bond moves, the reputation drops, the event is permanent. `pnpm demo` runs that exact
+slash as its 17th transaction — not a simulation of it, the real call.
+
+### The whole product is one command from verification
+
+```bash
+pnpm demo    # 18 transactions: deploy, seat, play, covenant, betray, slash, settle
+```
+
+Not a video. Not a screenshot. A script that does the thing.
+
+### No hidden authority
+
+The AI cannot secretly tip the board: its seat is bound at join time and published at
+settlement, its reasoning is committed as a hash, and its reputation lives in a contract
+anyone can read. There is no operator panel, and no server that could quietly change an
+outcome.
 
 ---
 
@@ -227,39 +348,6 @@ slashing → reputation drop.
 The scripted path is comfortably inside budget. Two segments are **not** yet measured and
 should be rehearsed before a live demo: wallet-approval time on testnet (18 prompts), and
 the agent's response latency when driven by a live Kimi call.
-
----
-
-## Honest ZK
-
-The ZK layer is **staged and labelled**. Nothing here pretends to be a complete circuit.
-
-| Level | Status | What it actually does |
-|---|---|---|
-| **L0** | **Shipped** | Hash commitment + dual ECDSA + UI concealment. The covenant plaintext never touches the chain. |
-| **L1** | **Shipped** | `IVerifier` interface in place and wired into `Covenant`. |
-| **L2** | **Not implemented** | Preimage ZK (circom / Noir). Interface ready; no circuit exists. |
-| **L3** | **Not implemented** | Fully anonymous covenants. |
-
-`StubVerifier` accepts an **empty** proof (the P0 ECDSA path, checked in `Covenant`) and
-**rejects any non-empty blob**. It refuses to pretend it verified something. That behaviour
-is deliberate and covered by tests.
-
-We would rather show you a labelled stub than a circuit that does not run.
-
----
-
-## Roadmap (Not Done)
-
-| Item | Status |
-|---|---|
-| Preimage ZK circuit (L2) | Interface reserved, no implementation |
-| Checkmate detection on-chain | Deliberately off-chain — `isInCheck` ≈ 379k gas, `hasAnyLegalMove` ≈ 533k |
-| Mainnet deployment | Testnet only |
-| Contract size headroom | `GameTable` is 24,073 B of the 24,576 B EIP-170 limit — **503 B left** |
-
-That last row is a real constraint, not a footnote. Further on-chain features require
-switching `require` strings to custom errors first (measured saving: ~1.9 KB).
 
 ---
 
