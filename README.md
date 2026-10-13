@@ -207,11 +207,26 @@ Two traps are called out on the diagram, both of which cost us real debugging ti
 `eth_getLogs` is capped at **100 blocks** on Monad's public RPC, and a mirror without
 provenance accumulates **ghost games** after every contract redeploy.
 
+The boundary drawn across the middle is the load-bearing idea: above it is authoritative
+and irreplaceable, below it is derived and disposable.
+
 ### Demo workflow
 
 **Interactive diagram:** [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) —
 the three-minute runbook: connect wallet → fill three seats → play → covenant → betrayal →
 slashing → reputation drop.
+
+**Measured timing** (so the three-minute budget is arithmetic, not hope):
+
+| Segment | Measured | Notes |
+|---|---|---|
+| Full scripted run, 18 transactions | **79 s** | anvil, `--block-time 1` — 44% of a 3-minute budget |
+| Connectome load at agent start | **< 1 s** | read from the local 3.3 MB subnet file, no network |
+| One spiking simulation | **93 ms** | 2,500 neurons / 84,014 synapses |
+
+The scripted path is comfortably inside budget. Two segments are **not** yet measured and
+should be rehearsed before a live demo: wallet-approval time on testnet (18 prompts), and
+the agent's response latency when driven by a live Kimi call.
 
 ---
 
@@ -267,6 +282,24 @@ pnpm --filter agent start  # the mole: registers, fills the empty seat, plays, b
 ```
 
 **Requirements:** Node `22.x` (for `node:sqlite`), pnpm `10.33.4`, Foundry.
+
+### Running the agent against a local chain
+
+`agent/.env` points at testnet by default, and `VITE_*` variables take precedence over
+`frontend/src/lib/addresses.json`. So to run the mole locally you must override the
+addresses, or it will call testnet contracts on a local chain and fail with an empty
+`getReputation`:
+
+```bash
+A=$(python3 -c "import json;d=json.load(open('frontend/src/lib/addresses.json'));print(*[d[k] for k in ('GameTable','Covenant','AgentRegistry','StubVerifier')])")
+set -- $A
+CHAIN_ID=31337 RPC_URL=http://127.0.0.1:8545 \
+  VITE_GAMETABLE=$1 VITE_COVENANT=$2 VITE_AGENTREGISTRY=$3 VITE_STUBVERIFIER=$4 \
+  pnpm --filter agent start
+```
+
+The agent's key must hold MON on whichever chain it runs against. `loadConfig` refuses to
+start if a publicly-known Anvil key is used on a non-local chain.
 
 ### Testnet addresses (`10143`)
 
