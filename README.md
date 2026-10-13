@@ -25,6 +25,14 @@ language model supplies the excuse.
 > collateral, betrayal is a priced transaction, and the AI opponent's decision layer is an
 > actual connectome rather than a personality prompt.
 
+![The board](docs/diagrams/board.png)
+
+**The board is a 154-node graph, not a grid.** Three camps sit on a shared ring with one
+contested centre — which is why "who is winning" is never a fact and always a negotiation.
+Each piece carries a price: a soldier shuffle costs ~0.009 MON, a chariot raid up to ~0.578.
+The right-hand panel is the dual ledger — per-seat play balance (fuel, burned on every move)
+and seat stake (returned or seized at settlement).
+
 ---
 
 ## Background
@@ -463,6 +471,7 @@ JSON source, schema validation, and real-browser checks, not hand-drawn images.
 
 | Diagram | Image | Interactive |
 |---|---|---|
+| The board (product view) | [`board.png`](docs/diagrams/board.png) | [live app](https://sanguo-xiangqi.vercel.app) |
 | Runtime architecture | [`architecture.png`](docs/diagrams/architecture.png) | [`architecture.html`](docs/diagrams/architecture.html) |
 | Data flow (authority vs. mirror) | [`dataflow.png`](docs/diagrams/dataflow.png) | [`dataflow.html`](docs/diagrams/dataflow.html) |
 | Single-transaction move (sequence) | [`sequence.png`](docs/diagrams/sequence.png) | [`sequence.html`](docs/diagrams/sequence.html) |
