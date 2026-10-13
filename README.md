@@ -37,9 +37,6 @@ advancing**, and once you are through, the only way on is the inward spoke towar
 central palace. Two players can be standing on adjacent nodes with no legal move between
 them.
 
-> Pieces show the three kingdoms; the seat panels show camp colours
-> (红营 / 黑营 / 绿营). Same three seats, two vocabularies.
-
 ![The seat ledger](docs/diagrams/seat-ledger.png)
 
 The seat panel is a **dual ledger**: *play balance* is fuel — burned on every move, gone from
