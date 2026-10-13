@@ -167,6 +167,14 @@ the survivors settle immediately instead of grinding out the remaining plies.
 
 ## The Cyberfly: the mole thinks with a real connectome
 
+```
+ board state        sensory input        connectome            drives          Kimi
+ (154 nodes)  ──▶   (6 scalars)   ──▶   (2,500 neurons)  ──▶  (3 scalars) ──▶ move + dialogue
+                                        84,014 synapses       aggression
+                                        93 ms per pass        avoidance
+                                        deterministic         courtship
+```
+
 Every other "AI agent" in this space is a prompt. This one has a nervous system.
 
 The mole's decisions run through a subnetwork of the **Janelia FlyEM MaleCNS** connectome —
@@ -269,9 +277,11 @@ outcome.
 
 ## Architecture
 
-**Interactive diagram:** [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html)
-— click any node to trace its connections. Source evidence is pinned to repository paths
-and line numbers at commit `5fbe2f6`.
+![Runtime architecture](docs/diagrams/architecture.png)
+
+**Interactive version:** [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html)
+— click any node to trace its connections, follow a route, or export. Source evidence is
+pinned to repository paths and line numbers at commit `5fbe2f6`.
 
 ```
 Browser + wallet ──HTTPS──▶ SPA (Vercel) ──signed tx──▶ GameTable ──┐
@@ -304,7 +314,9 @@ Key components, and where to verify each claim:
 
 ### One move, end to end
 
-**Interactive diagram:** [`docs/diagrams/sequence.html`](docs/diagrams/sequence.html)
+![Single-transaction move](docs/diagrams/sequence.png)
+
+**Interactive version:** [`docs/diagrams/sequence.html`](docs/diagrams/sequence.html)
 
 A naive implementation splits commit and reveal into two transactions. That creates a
 front-running window: everyone sees your plaintext before deciding their own move. So
@@ -317,7 +329,9 @@ unblocks `finalizeGame` — the other two are not forced to grind out the remain
 
 ### Data flow
 
-**Interactive diagram:** [`docs/diagrams/dataflow.html`](docs/diagrams/dataflow.html)
+![Data flow](docs/diagrams/dataflow.png)
+
+**Interactive version:** [`docs/diagrams/dataflow.html`](docs/diagrams/dataflow.html)
 
 The chain is the only source of truth; everything below the boundary is a mirror you can
 delete and rescan without losing a single fact. That boundary is the whole reason the
@@ -333,7 +347,9 @@ and irreplaceable, below it is derived and disposable.
 
 ### Demo workflow
 
-**Interactive diagram:** [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) —
+![Three-minute demo workflow](docs/diagrams/workflow.png)
+
+**Interactive version:** [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) —
 the three-minute runbook: connect wallet → fill three seats → play → covenant → betrayal →
 slashing → reputation drop.
 
@@ -445,12 +461,12 @@ Things that cost real time and are now encoded as guardrails:
 Generated with **[Archify](https://github.com/tt-a1i/archify)** from the repository — typed
 JSON source, schema validation, and real-browser checks, not hand-drawn images.
 
-| Diagram | File |
-|---|---|
-| Runtime architecture | [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html) |
-| Data flow (authority vs. mirror) | [`docs/diagrams/dataflow.html`](docs/diagrams/dataflow.html) |
-| Single-transaction move (sequence) | [`docs/diagrams/sequence.html`](docs/diagrams/sequence.html) |
-| Three-minute demo (workflow) | [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) |
+| Diagram | Image | Interactive |
+|---|---|---|
+| Runtime architecture | [`architecture.png`](docs/diagrams/architecture.png) | [`architecture.html`](docs/diagrams/architecture.html) |
+| Data flow (authority vs. mirror) | [`dataflow.png`](docs/diagrams/dataflow.png) | [`dataflow.html`](docs/diagrams/dataflow.html) |
+| Single-transaction move (sequence) | [`sequence.png`](docs/diagrams/sequence.png) | [`sequence.html`](docs/diagrams/sequence.html) |
+| Three-minute demo (workflow) | [`workflow.png`](docs/diagrams/workflow.png) | [`workflow.html`](docs/diagrams/workflow.html) |
 
 Each is a self-contained HTML file. Open it directly — no install, no server. Sources live
 in `.archify/`, so any diagram can be revised without redrawing it.
