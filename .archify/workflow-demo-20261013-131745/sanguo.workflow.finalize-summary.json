@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "workflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/candidate.json",
+    "sha256": "6e1ae3bc5b547a56b9d9ed819e317a240332acb896128a05c8055ee4e27d3c81",
+    "bytes": 5421
+  },
+  "artifact": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/sanguo.workflow.html",
+    "sha256": "dc2b1933eef2ec5b439160577440291cb69d3e609f6afb95c4aca94bab76d727",
+    "bytes": 758899
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/sanguo.workflow.finalize.json",
+    "summaryReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/sanguo.workflow.finalize-summary.json",
+    "browserCheckReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/sanguo.workflow.browser-check.json"
+  },
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2283,
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "routesOverSuggestedBends": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [],
+      "detours": [
+        {
+          "relationship": {
+            "id": "k1",
+            "from": "n3",
+            "to": "n4",
+            "label": "",
+            "collectionIndex": 1,
+            "artifactIndex": 2
+          },
+          "bends": 3,
+          "stretch": 1.185
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "n3 → n4 needs 3 bends: move node n3 or n4 so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "三国棋局 · 运行时架构（Monad 测试网）",
+    "output": ".archify/architecture-sanguo-20261013-130900/sanguo.architecture.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": {
+      "url": "https://github.com/rectinajh/sanguo-xiangqi.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "5fbe2f692ff2f5a452ea588f3a6fd3119698e8e2"
+    }
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "浏览器 + 钱包",
+      "sublabel": "玩家，私钥不出钱包",
+      "pos": [
+        60,
+        60
+      ],
+      "size": [
+        160,
+        80
+      ]
+    },
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "前端 SPA",
+      "sublabel": "Vercel 静态托管",
+      "pos": [
+        280,
+        60
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "frontend/src/App.tsx",
+          "line": 656,
+          "label": "走子"
+        }
+      ]
+    },
+    {
+      "id": "gametable",
+      "type": "backend",
+      "label": "GameTable 合约",
+      "sublabel": "一步一签 · 每手烧 MON",
+      "pos": [
+        840,
+        60
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "contracts/src/GameTable.sol",
+          "line": 489,
+          "label": "commitAndRevealMove"
+        }
+      ]
+    },
+    {
+      "id": "covenant",
+      "type": "security",
+      "label": "Covenant 盟约",
+      "sublabel": "诚意金 + 背刺罚没",
+      "pos": [
+        840,
+        220
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "contracts/src/Covenant.sol",
+          "line": 396,
+          "label": "challengeBetrayal"
+        }
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "backend",
+      "label": "AgentRegistry 声誉",
+      "sublabel": "trustScore · 逼人类烧油量",
+      "pos": [
+        840,
+        380
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "contracts/src/AgentRegistry.sol",
+          "line": 59,
+          "label": "registerAgent"
+        }
+      ]
+    },
+    {
+      "id": "indexer",
+      "type": "backend",
+      "label": "索引器",
+      "sublabel": "systemd 常驻 · 公网 API",
+      "pos": [
+        540,
+        560
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "server/src/indexer.ts",
+          "line": 635,
+          "label": "HTTP 服务"
+        }
+      ]
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Supabase Postgres",
+      "sublabel": "按合约地址隔离",
+      "pos": [
+        840,
+        560
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "server/src/store.ts",
+          "line": 49,
+          "label": "PgStore"
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "AI 卧底 agent",
+      "sublabel": "自动补位 · 决策 · 说话",
+      "pos": [
+        1140,
+        60
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "agent/src/index.ts",
+          "line": 586,
+          "label": "决策入口"
+        }
+      ]
+    },
+    {
+      "id": "cyberfly",
+      "type": "database",
+      "label": "赛博果蝇连接组",
+      "sublabel": "MaleCNS 真实突触",
+      "pos": [
+        1140,
+        220
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "agent/src/cyberfly.ts",
+          "line": 142,
+          "label": "脉冲仿真"
+        }
+      ]
+    },
+    {
+      "id": "kimi",
+      "type": "cloud",
+      "label": "Kimi API",
+      "sublabel": "台词与自我合理化",
+      "pos": [
+        1140,
+        380
+      ],
+      "size": [
+        190,
+        80
+      ],
+      "sources": [
+        {
+          "path": "agent/src/kimi.ts",
+          "line": 142,
+          "label": "decideWithKimi"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Monad 测试网 10143",
+      "wraps": [
+        "gametable",
+        "covenant",
+        "registry"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "索引服务器 · nginx + systemd",
+      "wraps": [
+        "indexer"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "play",
+      "from": "browser",
+      "to": "frontend",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "sign",
+      "from": "frontend",
+      "to": "gametable",
+      "label": "钱包签名",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ally",
+      "from": "frontend",
+      "to": "covenant",
+      "label": "诚意金 / 背刺"
+    },
+    {
+      "id": "rep",
+      "from": "frontend",
+      "to": "registry",
+      "label": "查声誉"
+    },
+    {
+      "id": "board",
+      "from": "indexer",
+      "to": "gametable",
+      "label": "只读扫描",
+      "variant": "dashed"
+    },
+    {
+      "id": "seats",
+      "from": "indexer",
+      "to": "registry",
+      "label": "声誉刷新",
+      "variant": "dashed"
+    },
+    {
+      "id": "persist",
+      "from": "indexer",
+      "to": "store",
+      "label": "upsert"
+    },
+    {
+      "id": "board-api",
+      "from": "frontend",
+      "to": "indexer",
+      "label": "读排行榜 / 历史",
+      "variant": "dashed"
+    },
+    {
+      "id": "agent-move",
+      "from": "agent",
+      "to": "gametable",
+      "label": "代走 + 背刺"
+    },
+    {
+      "id": "agent-brain",
+      "from": "agent",
+      "to": "cyberfly",
+      "label": "感觉输入 → 脉冲"
+    },
+    {
+      "id": "agent-voice",
+      "from": "agent",
+      "to": "kimi",
+      "label": "选着法 + 台词"
+    },
+    {
+      "id": "agent-ally",
+      "from": "agent",
+      "to": "covenant",
+      "label": "锁诚意金",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "主要用户旅程",
+      "items": [
+        "浏览器钱包连 Vercel 前端，私钥不出钱包",
+        "走子一步一签，直接落到 GameTable",
+        "结盟走 Covenant 诚意金，背刺由 challengeBetrayal 罚没"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "读侧为什么绕一圈",
+      "items": [
+        "链上没有「列出所有对局」的接口",
+        "索引器只读扫描事件，写进 Supabase",
+        "前端读排行榜与历史走索引器，不直连数据库"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "卧底的两层",
+      "items": [
+        "连接组：确定性本能，同一局面永远算出同一冲动",
+        "Kimi：把冲动变成台词与自我合理化",
+        "连接组只出行为倾向，不直接选棋着"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "读数据时必须注意",
+      "items": [
+        "合约重新部署地址就变，而 gameId 从 1 重来",
+        "所以 games 表带 contract 列，读接口按当前合约过滤",
+        "否则旧部署的幽灵对局会一直留在榜上"
+      ]
+    }
+  ]
+}

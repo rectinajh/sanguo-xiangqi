@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "7e95a3c4-daf9-49b2-86fe-2aa24ed30062",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/candidate.json",
+  "output": "/Users/rectinajh/src/sanguo-xiangqi/.archify/workflow-demo-20261013-131745/sanguo.workflow.html",
+  "specification": {
+    "sha256": "6e1ae3bc5b547a56b9d9ed819e317a240332acb896128a05c8055ee4e27d3c81",
+    "bytes": 5421
+  },
+  "artifact": {
+    "sha256": "dc2b1933eef2ec5b439160577440291cb69d3e609f6afb95c4aca94bab76d727",
+    "bytes": 758899
+  }
+}

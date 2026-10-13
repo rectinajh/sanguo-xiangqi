@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "一笔走子的数据流 · 唯一权威与它的只读镜像",
+    "output": ".archify/dataflow-state-20261013-131609/sanguo.dataflow.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": {
+      "url": "https://github.com/rectinajh/sanguo-xiangqi.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "5fbe2f692ff2f5a452ea588f3a6fd3119698e8e2"
+    },
+    "viewBox": [
+      2400,
+      600
+    ]
+  },
+  "stages": [
+    {
+      "label": "动作"
+    },
+    {
+      "label": "写入路径"
+    },
+    {
+      "label": "链上权威状态"
+    },
+    {
+      "label": "只读镜像"
+    },
+    {
+      "label": "读侧"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "move",
+      "type": "external",
+      "label": "玩家走子",
+      "sublabel": "钱包签名",
+      "stage": 0,
+      "row": 0,
+      "icon": "person",
+      "width": 150,
+      "height": 48
+    },
+    {
+      "id": "agentmove",
+      "type": "backend",
+      "label": "AI 卧底代走",
+      "sublabel": "连接组冲动 → Kimi",
+      "stage": 0,
+      "row": 1,
+      "icon": "backend",
+      "width": 170,
+      "sources": [
+        {
+          "path": "agent/src/index.ts",
+          "line": 586,
+          "label": "决策入口"
+        }
+      ],
+      "height": 48
+    },
+    {
+      "id": "commit",
+      "type": "frontend",
+      "label": "commitAndReveal",
+      "sublabel": "承诺与明文同一笔交易",
+      "stage": 1,
+      "row": 0,
+      "icon": "frontend",
+      "width": 180,
+      "sources": [
+        {
+          "path": "frontend/src/lib/contracts.ts",
+          "line": 289,
+          "label": "客户端封装"
+        }
+      ],
+      "height": 48
+    },
+    {
+      "id": "game",
+      "type": "backend",
+      "label": "链上权威状态",
+      "sublabel": "GameTable 落子 · Covenant 罚没 · 声誉更新",
+      "stage": 2,
+      "row": 0,
+      "icon": "backend",
+      "width": 240,
+      "sources": [
+        {
+          "path": "contracts/src/GameTable.sol",
+          "line": 489,
+          "label": "唯一写入点"
+        }
+      ],
+      "height": 48
+    },
+    {
+      "id": "mirror",
+      "type": "database",
+      "label": "事件 → 索引器 → Supabase",
+      "sublabel": "100 块分片扫描 · games 带 contract 列",
+      "stage": 3,
+      "row": 0,
+      "icon": "database",
+      "width": 230,
+      "sources": [
+        {
+          "path": "server/src/indexer.ts",
+          "line": 130,
+          "label": "getEventsChunked"
+        },
+        {
+          "path": "server/src/store.ts",
+          "line": 49,
+          "label": "PgStore"
+        }
+      ],
+      "height": 48
+    },
+    {
+      "id": "panel",
+      "type": "frontend",
+      "label": "排行榜 / 历史 / 战绩",
+      "sublabel": "读侧，不直连链",
+      "stage": 4,
+      "row": 0,
+      "icon": "frontend",
+      "width": 200,
+      "height": 48
+    }
+  ],
+  "flows": [
+    {
+      "id": "f1",
+      "from": "move",
+      "to": "commit",
+      "label": "选点",
+      "classification": "authoring"
+    },
+    {
+      "id": "f2",
+      "from": "agentmove",
+      "to": "commit",
+      "label": "选着法",
+      "classification": "authoring"
+    },
+    {
+      "id": "f3",
+      "from": "commit",
+      "to": "game",
+      "label": "唯一写入路径",
+      "classification": "authoritative write",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f7",
+      "from": "mirror",
+      "to": "panel",
+      "label": "GET /leaderboard",
+      "classification": "read",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "唯一权威来源",
+      "items": [
+        "链上合约是唯一权威状态，没有任何服务持有它的副本",
+        "所有写入都经过 commitAndReveal 这一个入口",
+        "Supabase 是可重建的只读镜像：删掉重扫即可，不丢任何事实"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "镜像为什么必须带合约地址",
+      "items": [
+        "合约重新部署后地址就变，而 gameId 从 1 重来",
+        "镜像若不记录来源合约，旧部署的对局会永远留在榜上",
+        "实测症状：链上座位全空，前端却说「坐了一个人」",
+        "所以 games 表带 contract 列，读接口按当前合约过滤"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "分片扫描是被逼的",
+      "items": [
+        "Monad 公共 RPC 限制 eth_getLogs 只能查 100 个块",
+        "索引器自适应分片，而不是假设自己能用大区间",
+        "扫描游标存在 meta 表，重启不会从头再来"
+      ]
+    }
+  ]
+}

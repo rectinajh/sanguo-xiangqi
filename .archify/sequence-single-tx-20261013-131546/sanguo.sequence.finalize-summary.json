@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "sequence",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/candidate.json",
+    "sha256": "7eebc3b0e54539b05b0f4555207b84ce6122d5bb2b1c0b0abbdaa148bb6c325b",
+    "bytes": 5550
+  },
+  "artifact": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/sanguo.sequence.html",
+    "sha256": "156e31902ce2ae1a3be5c5626d5800bdc84cebd96d0a5e3aa6eb9f79b057ee63",
+    "bytes": 759098
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/sanguo.sequence.finalize.json",
+    "summaryReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/sanguo.sequence.finalize-summary.json",
+    "browserCheckReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/sanguo.sequence.browser-check.json"
+  },
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2145
+}

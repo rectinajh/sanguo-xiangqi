@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "dataflow",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/candidate.json",
+    "sha256": "55e9e635bd9732a7b172cf6cae49beefda5c3fabe275f1b7cadbc15c44341059",
+    "bytes": 4753
+  },
+  "artifact": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.html"
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase dataflow flows[0] id \"f1\" \"move\" -> \"commit\" has a 7px interior segment 1 [200, 152] -> [200, 145] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.",
+      "subject": {
+        "diagramType": "dataflow",
+        "collection": "flows",
+        "index": 0,
+        "id": "f1",
+        "from": "move",
+        "to": "commit"
+      },
+      "evidence": {
+        "segmentIndex": 1,
+        "position": "interior",
+        "lengthPx": 7,
+        "minimumPx": 8,
+        "from": [
+          200,
+          152
+        ],
+        "to": [
+          200,
+          145
+        ]
+      },
+      "supportedFixes": [
+        "adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor"
+      ]
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Node \"agentmove\" exceeds the horizontal bounds of the viewBox — reduce node.width or increase meta.viewBox[0].",
+      "subject": {
+        "diagramType": "dataflow"
+      }
+    },
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase dataflow flows[2] id \"f3\" \"commit\" -> \"game\" has a 5px source-stub segment 0 [405, 152] -> [410, 152] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.",
+      "subject": {
+        "diagramType": "dataflow",
+        "collection": "flows",
+        "index": 2,
+        "id": "f3",
+        "from": "commit",
+        "to": "game"
+      },
+      "evidence": {
+        "segmentIndex": 0,
+        "position": "source-stub",
+        "lengthPx": 5,
+        "minimumPx": 8,
+        "from": [
+          405,
+          152
+        ],
+        "to": [
+          410,
+          152
+        ]
+      },
+      "supportedFixes": [
+        "adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor"
+      ]
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Nodes \"commit\" and \"game\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+      "subject": {
+        "diagramType": "dataflow"
+      }
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Nodes \"game\" and \"mirror\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+      "subject": {
+        "diagramType": "dataflow"
+      }
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Nodes \"mirror\" and \"panel\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+      "subject": {
+        "diagramType": "dataflow"
+      }
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Flow \"唯一写入路径\" is too short (5px; minimum 34px) — route it through a channel or spread its nodes.",
+      "subject": {
+        "diagramType": "dataflow"
+      }
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Flow \"GET /leaderboard\" is too short (0px; minimum 34px) — route it through a channel or spread its nodes.",
+      "subject": {
+        "diagramType": "dataflow"
+      }
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 14,
+    "shown": 8,
+    "truncated": true
+  },
+  "evidence": {
+    "receipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.finalize.json",
+    "summaryReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.finalize-summary.json"
+  },
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 437,
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/candidate.json",
+    "constraint": "Preserve unaffected semantics and geometry; do not replace the whole candidate.",
+    "then": "finalize-once"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "9638489c-c5d7-4566-b119-23d334e0ccd7",
+  "status": "current",
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/candidate.json",
+  "output": "/Users/rectinajh/src/sanguo-xiangqi/.archify/sequence-single-tx-20261013-131546/sanguo.sequence.html",
+  "specification": {
+    "sha256": "7eebc3b0e54539b05b0f4555207b84ce6122d5bb2b1c0b0abbdaa148bb6c325b",
+    "bytes": 5550
+  },
+  "artifact": {
+    "sha256": "156e31902ce2ae1a3be5c5626d5800bdc84cebd96d0a5e3aa6eb9f79b057ee63",
+    "bytes": 759098
+  }
+}

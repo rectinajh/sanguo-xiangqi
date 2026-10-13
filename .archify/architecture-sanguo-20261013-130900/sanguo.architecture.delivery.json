@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "fb72d998-d144-4ee5-834d-6a7741e6c890",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/candidate.json",
+  "output": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/sanguo.architecture.html",
+  "specification": {
+    "sha256": "8ec634ef318549c0c5b4a719ee3c8c42e296bf082c0d315e27dd3a2fb68a448c",
+    "bytes": 7351
+  },
+  "artifact": {
+    "sha256": "f4b6738ebabf3fc80348a82ce9382ef98f4652dc831f091b5e4ca631ccca2a3f",
+    "bytes": 771222
+  }
+}

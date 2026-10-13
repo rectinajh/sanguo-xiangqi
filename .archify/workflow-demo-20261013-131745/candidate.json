@@ -1,0 +1,272 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "3 分钟演示剧本 · 从入座到背刺罚没",
+    "output": ".archify/workflow-demo-20261013-131745/sanguo.workflow.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "animation": "trace",
+    "repository": {
+      "url": "https://github.com/rectinajh/sanguo-xiangqi.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "5fbe2f692ff2f5a452ea588f3a6fd3119698e8e2"
+    }
+  },
+  "lanes": [
+    {
+      "id": "human",
+      "label": "玩家（浏览器钱包）"
+    },
+    {
+      "id": "chain",
+      "label": "Monad 链上"
+    },
+    {
+      "id": "mole",
+      "label": "AI 卧底 agent"
+    }
+  ],
+  "phases": [
+    {
+      "id": "seat",
+      "label": "凑齐三人",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "play",
+      "label": "开打",
+      "fromCol": 2,
+      "toCol": 3
+    },
+    {
+      "id": "betray",
+      "label": "结盟与背刺",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "nodes": [
+    {
+      "id": "n1",
+      "lane": "human",
+      "col": 0,
+      "type": "external",
+      "label": "连接钱包",
+      "sublabel": "领测试币",
+      "width": 150
+    },
+    {
+      "id": "n3",
+      "lane": "human",
+      "col": 1,
+      "type": "external",
+      "label": "建房 / 入座",
+      "sublabel": "邀请链接",
+      "width": 150
+    },
+    {
+      "id": "n4",
+      "lane": "chain",
+      "col": 1,
+      "type": "backend",
+      "label": "三座满",
+      "sublabel": "自动开局",
+      "width": 150,
+      "sources": [
+        {
+          "path": "contracts/src/GameTable.sol",
+          "line": 183,
+          "label": "join"
+        }
+      ]
+    },
+    {
+      "id": "n5",
+      "lane": "human",
+      "col": 2,
+      "type": "external",
+      "label": "走一手",
+      "sublabel": "选点 → 签名",
+      "width": 150
+    },
+    {
+      "id": "n6",
+      "lane": "chain",
+      "col": 2,
+      "type": "backend",
+      "label": "落子 + 烧油",
+      "sublabel": "一步一笔交易",
+      "width": 150,
+      "sources": [
+        {
+          "path": "contracts/src/GameTable.sol",
+          "line": 489,
+          "label": "commitAndRevealMove"
+        }
+      ]
+    },
+    {
+      "id": "n7",
+      "lane": "mole",
+      "col": 3,
+      "type": "backend",
+      "label": "卧底代走",
+      "sublabel": "连接组冲动 → Kimi 选着",
+      "width": 170,
+      "sources": [
+        {
+          "path": "agent/src/cyberfly.ts",
+          "line": 142,
+          "label": "脉冲仿真"
+        },
+        {
+          "path": "agent/src/kimi.ts",
+          "line": 142,
+          "label": "decideWithKimi"
+        }
+      ]
+    },
+    {
+      "id": "n9",
+      "lane": "human",
+      "col": 4,
+      "type": "security",
+      "label": "发起盟约",
+      "sublabel": "诚意金上链",
+      "width": 150,
+      "sources": [
+        {
+          "path": "contracts/src/Covenant.sol",
+          "line": 122,
+          "label": "lockEarnest"
+        }
+      ]
+    },
+    {
+      "id": "n10",
+      "lane": "mole",
+      "col": 4,
+      "type": "backend",
+      "label": "接受盟约",
+      "sublabel": "假意履约",
+      "width": 150
+    },
+    {
+      "id": "n12",
+      "lane": "mole",
+      "col": 5,
+      "type": "backend",
+      "label": "吃盟友的士",
+      "sublabel": "台词自我合理化",
+      "width": 170
+    },
+    {
+      "id": "n13",
+      "lane": "chain",
+      "col": 5,
+      "type": "security",
+      "label": "罚没诚意金",
+      "sublabel": "challengeBetrayal",
+      "width": 160,
+      "sources": [
+        {
+          "path": "contracts/src/Covenant.sol",
+          "line": 396,
+          "label": "challengeBetrayal"
+        }
+      ]
+    }
+  ],
+  "mainPath": [
+    "n1",
+    "n3",
+    "n4",
+    "n5",
+    "n6",
+    "n7",
+    "n9",
+    "n10",
+    "n12",
+    "n13"
+  ],
+  "edges": [
+    {
+      "id": "k0",
+      "from": "n1",
+      "to": "n3",
+      "role": "main"
+    },
+    {
+      "id": "k1",
+      "from": "n3",
+      "to": "n4",
+      "role": "main"
+    },
+    {
+      "id": "k2",
+      "from": "n4",
+      "to": "n5",
+      "role": "main"
+    },
+    {
+      "id": "k3",
+      "from": "n5",
+      "to": "n6",
+      "role": "main"
+    },
+    {
+      "id": "k4",
+      "from": "n6",
+      "to": "n7",
+      "role": "main"
+    },
+    {
+      "id": "k5",
+      "from": "n7",
+      "to": "n9",
+      "role": "main"
+    },
+    {
+      "id": "k6",
+      "from": "n9",
+      "to": "n10",
+      "role": "main"
+    },
+    {
+      "id": "k7",
+      "from": "n10",
+      "to": "n12",
+      "role": "main"
+    },
+    {
+      "id": "k8",
+      "from": "n12",
+      "to": "n13",
+      "role": "main"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "这 3 分钟要证明什么",
+      "items": [
+        "不是「有个 AI 会下棋」，而是「AI 的行为有链上后果」",
+        "背刺不是剧情，是一次真实的罚没交易",
+        "声誉不是文案，是合约里的 trustScore"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "讲的时候别讲棋规",
+      "items": [
+        "评委不需要懂三人象棋，只需要看懂「结盟 → 背刺 → 罚没」",
+        "把 80% 时间花在油费与声誉，而不是走法",
+        "诚实标注：合约跑在测试网，不是主网"
+      ]
+    }
+  ],
+  "groups": []
+}

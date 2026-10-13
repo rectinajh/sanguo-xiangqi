@@ -1,0 +1,448 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "dataflow",
+  "quality": "showcase",
+  "startedAt": "2026-10-13T05:18:49.532Z",
+  "specification": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/candidate.json",
+    "sha256": "55e9e635bd9732a7b172cf6cae49beefda5c3fabe275f1b7cadbc15c44341059",
+    "bytes": 4753
+  },
+  "artifact": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.html"
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "/Users/rectinajh/Documents/ChatGPT/opc/.nodejs/node-v24.19.0-darwin-arm64/bin/node",
+        "/Users/rectinajh/.dsh/profiles/desktop/node_modules/@tt-a1i/archify-dsh/skills/archify/bin/archify.mjs",
+        "deliver",
+        "dataflow",
+        "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/candidate.json",
+        "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/rectinajh/src/sanguo-xiangqi",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "d2162dcb-1120-484f-9836-dc34548208ec",
+        "stage": "render",
+        "type": "dataflow",
+        "input": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/candidate.json",
+        "output": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.html",
+        "error": "Data-flow layout validation failed:\n- Node \"agentmove\" exceeds the horizontal bounds of the viewBox — reduce node.width or increase meta.viewBox[0].\n- Nodes \"commit\" and \"game\" are less than 10px apart — move one to another stage/row or adjust yOffset.\n- Nodes \"game\" and \"mirror\" are less than 10px apart — move one to another stage/row or adjust yOffset.\n- Nodes \"mirror\" and \"panel\" are less than 10px apart — move one to another stage/row or adjust yOffset.\n- Flow \"唯一写入路径\" is too short (5px; minimum 34px) — route it through a channel or spread its nodes.\n- Flow \"GET /leaderboard\" is too short (0px; minimum 34px) — route it through a channel or spread its nodes.\n- [composition/micro-segment] showcase dataflow flows[0] id \"f1\" \"move\" -> \"commit\" has a 7px interior segment 1 [200, 152] -> [200, 145] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.\n- [composition/micro-segment] showcase dataflow flows[2] id \"f3\" \"commit\" -> \"game\" has a 5px source-stub segment 0 [405, 152] -> [410, 152] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.\n- Label \"选点\" overlaps node \"move\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [172, 128, 56, 27]\n  node \"move\" rect: [25, 128, 150, 48]\n  Suggested fix: set labelAt [200, 191] or set labelDy 53 (below); or set labelAt [200, 108] or set labelDy -30 (above)\n- Label \"选点\" overlaps node \"commit\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [172, 128, 56, 27]\n  node \"commit\" rect: [225, 128, 180, 48]\n  Suggested fix: set labelAt [200, 191] or set labelDy 53 (below); or set labelAt [200, 108] or set labelDy -30 (above)\n- Label \"唯一写入路径\" overlaps node \"commit\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [355, 131, 105, 27]\n  node \"commit\" rect: [225, 128, 180, 48]\n  Suggested fix: set labelAt [408, 191] or set labelDx 1 with labelDy 49 (below); or set labelAt [408, 108] or set labelDx 1 with labelDy -34 (above)\n- Label \"唯一写入路径\" overlaps node \"game\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [355, 131, 105, 27]\n  node \"game\" rect: [410, 128, 240, 48]\n  Suggested fix: set labelAt [408, 191] or set labelDx 1 with labelDy 49 (below); or set labelAt [408, 108] or set labelDx 1 with labelDy -34 (above)\n- Label \"GET /leaderboard\" overlaps node \"mirror\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [815, 131, 90, 27]\n  node \"mirror\" rect: [630, 128, 230, 48]\n  Suggested fix: set labelAt [860, 191] or set labelDy 49 (below); or set labelAt [860, 108] or set labelDy -34 (above)\n- Label \"GET /leaderboard\" overlaps node \"panel\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [815, 131, 90, 27]\n  node \"panel\" rect: [860, 128, 200, 48]\n  Suggested fix: set labelAt [860, 191] or set labelDy 49 (below); or set labelAt [860, 108] or set labelDy -34 (above)",
+        "diagnostics": [
+          {
+            "code": "composition/micro-segment",
+            "severity": "error",
+            "message": "[composition/micro-segment] showcase dataflow flows[0] id \"f1\" \"move\" -> \"commit\" has a 7px interior segment 1 [200, 152] -> [200, 145] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.",
+            "subject": {
+              "diagramType": "dataflow",
+              "collection": "flows",
+              "index": 0,
+              "id": "f1",
+              "from": "move",
+              "to": "commit"
+            },
+            "evidence": {
+              "segmentIndex": 1,
+              "position": "interior",
+              "lengthPx": 7,
+              "minimumPx": 8,
+              "from": [
+                200,
+                152
+              ],
+              "to": [
+                200,
+                145
+              ]
+            },
+            "supportedFixes": [
+              "adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor"
+            ]
+          },
+          {
+            "code": "composition/micro-segment",
+            "severity": "error",
+            "message": "[composition/micro-segment] showcase dataflow flows[2] id \"f3\" \"commit\" -> \"game\" has a 5px source-stub segment 0 [405, 152] -> [410, 152] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.",
+            "subject": {
+              "diagramType": "dataflow",
+              "collection": "flows",
+              "index": 2,
+              "id": "f3",
+              "from": "commit",
+              "to": "game"
+            },
+            "evidence": {
+              "segmentIndex": 0,
+              "position": "source-stub",
+              "lengthPx": 5,
+              "minimumPx": 8,
+              "from": [
+                405,
+                152
+              ],
+              "to": [
+                410,
+                152
+              ]
+            },
+            "supportedFixes": [
+              "adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor"
+            ]
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Node \"agentmove\" exceeds the horizontal bounds of the viewBox — reduce node.width or increase meta.viewBox[0].",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Nodes \"commit\" and \"game\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Nodes \"game\" and \"mirror\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Nodes \"mirror\" and \"panel\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Flow \"唯一写入路径\" is too short (5px; minimum 34px) — route it through a channel or spread its nodes.",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Flow \"GET /leaderboard\" is too short (0px; minimum 34px) — route it through a channel or spread its nodes.",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"选点\" overlaps node \"move\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [172, 128, 56, 27]\n  node \"move\" rect: [25, 128, 150, 48]\n  Suggested fix: set labelAt [200, 191] or set labelDy 53 (below); or set labelAt [200, 108] or set labelDy -30 (above)",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"选点\" overlaps node \"commit\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [172, 128, 56, 27]\n  node \"commit\" rect: [225, 128, 180, 48]\n  Suggested fix: set labelAt [200, 191] or set labelDy 53 (below); or set labelAt [200, 108] or set labelDy -30 (above)",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"唯一写入路径\" overlaps node \"commit\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [355, 131, 105, 27]\n  node \"commit\" rect: [225, 128, 180, 48]\n  Suggested fix: set labelAt [408, 191] or set labelDx 1 with labelDy 49 (below); or set labelAt [408, 108] or set labelDx 1 with labelDy -34 (above)",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"唯一写入路径\" overlaps node \"game\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [355, 131, 105, 27]\n  node \"game\" rect: [410, 128, 240, 48]\n  Suggested fix: set labelAt [408, 191] or set labelDx 1 with labelDy 49 (below); or set labelAt [408, 108] or set labelDx 1 with labelDy -34 (above)",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"GET /leaderboard\" overlaps node \"mirror\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [815, 131, 90, 27]\n  node \"mirror\" rect: [630, 128, 230, 48]\n  Suggested fix: set labelAt [860, 191] or set labelDy 49 (below); or set labelAt [860, 108] or set labelDy -34 (above)",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"GET /leaderboard\" overlaps node \"panel\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [815, 131, 90, 27]\n  node \"panel\" rect: [860, 128, 200, 48]\n  Suggested fix: set labelAt [860, 191] or set labelDy 49 (below); or set labelAt [860, 108] or set labelDy -34 (above)",
+            "subject": {
+              "diagramType": "dataflow"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          }
+        ],
+        "provenance": "absent",
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "diagnostics": [
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase dataflow flows[0] id \"f1\" \"move\" -> \"commit\" has a 7px interior segment 1 [200, 152] -> [200, 145] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.",
+      "subject": {
+        "diagramType": "dataflow",
+        "collection": "flows",
+        "index": 0,
+        "id": "f1",
+        "from": "move",
+        "to": "commit"
+      },
+      "evidence": {
+        "segmentIndex": 1,
+        "position": "interior",
+        "lengthPx": 7,
+        "minimumPx": 8,
+        "from": [
+          200,
+          152
+        ],
+        "to": [
+          200,
+          145
+        ]
+      },
+      "supportedFixes": [
+        "adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor"
+      ]
+    },
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase dataflow flows[2] id \"f3\" \"commit\" -> \"game\" has a 5px source-stub segment 0 [405, 152] -> [410, 152] that is below the 8px micro-segment floor — adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor.",
+      "subject": {
+        "diagramType": "dataflow",
+        "collection": "flows",
+        "index": 2,
+        "id": "f3",
+        "from": "commit",
+        "to": "game"
+      },
+      "evidence": {
+        "segmentIndex": 0,
+        "position": "source-stub",
+        "lengthPx": 5,
+        "minimumPx": 8,
+        "from": [
+          405,
+          152
+        ],
+        "to": [
+          410,
+          152
+        ]
+      },
+      "supportedFixes": [
+        "adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor"
+      ]
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Node \"agentmove\" exceeds the horizontal bounds of the viewBox — reduce node.width or increase meta.viewBox[0].",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Nodes \"commit\" and \"game\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Nodes \"game\" and \"mirror\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Nodes \"mirror\" and \"panel\" are less than 10px apart — move one to another stage/row or adjust yOffset.",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Flow \"唯一写入路径\" is too short (5px; minimum 34px) — route it through a channel or spread its nodes.",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Flow \"GET /leaderboard\" is too short (0px; minimum 34px) — route it through a channel or spread its nodes.",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"选点\" overlaps node \"move\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [172, 128, 56, 27]\n  node \"move\" rect: [25, 128, 150, 48]\n  Suggested fix: set labelAt [200, 191] or set labelDy 53 (below); or set labelAt [200, 108] or set labelDy -30 (above)",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"选点\" overlaps node \"commit\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [172, 128, 56, 27]\n  node \"commit\" rect: [225, 128, 180, 48]\n  Suggested fix: set labelAt [200, 191] or set labelDy 53 (below); or set labelAt [200, 108] or set labelDy -30 (above)",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"唯一写入路径\" overlaps node \"commit\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [355, 131, 105, 27]\n  node \"commit\" rect: [225, 128, 180, 48]\n  Suggested fix: set labelAt [408, 191] or set labelDx 1 with labelDy 49 (below); or set labelAt [408, 108] or set labelDx 1 with labelDy -34 (above)",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"唯一写入路径\" overlaps node \"game\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [355, 131, 105, 27]\n  node \"game\" rect: [410, 128, 240, 48]\n  Suggested fix: set labelAt [408, 191] or set labelDx 1 with labelDy 49 (below); or set labelAt [408, 108] or set labelDx 1 with labelDy -34 (above)",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"GET /leaderboard\" overlaps node \"mirror\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [815, 131, 90, 27]\n  node \"mirror\" rect: [630, 128, 230, 48]\n  Suggested fix: set labelAt [860, 191] or set labelDy 49 (below); or set labelAt [860, 108] or set labelDy -34 (above)",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"GET /leaderboard\" overlaps node \"panel\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [815, 131, 90, 27]\n  node \"panel\" rect: [860, 128, 200, 48]\n  Suggested fix: set labelAt [860, 191] or set labelDy 49 (below); or set labelAt [860, 108] or set labelDy -34 (above)",
+      "subject": {
+        "diagramType": "dataflow"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.finalize.json",
+    "summaryReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-10-13T05:18:49.970Z",
+  "durationMs": 437,
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  }
+}

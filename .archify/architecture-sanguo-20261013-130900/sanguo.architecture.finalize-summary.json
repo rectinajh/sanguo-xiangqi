@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "finalize",
+  "status": "pass",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/candidate.json",
+    "sha256": "8ec634ef318549c0c5b4a719ee3c8c42e296bf082c0d315e27dd3a2fb68a448c",
+    "bytes": 7351
+  },
+  "artifact": {
+    "path": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/sanguo.architecture.html",
+    "sha256": "f4b6738ebabf3fc80348a82ce9382ef98f4652dc831f091b5e4ca631ccca2a3f",
+    "bytes": 771222
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "pass"
+  },
+  "diagnostics": [],
+  "diagnosticSummary": {
+    "total": 0,
+    "shown": 0,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/sanguo.architecture.finalize.json",
+    "summaryReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/sanguo.architecture.finalize-summary.json",
+    "browserCheckReceipt": "/Users/rectinajh/src/sanguo-xiangqi/.archify/architecture-sanguo-20261013-130900/sanguo.architecture.browser-check.json"
+  },
+  "update": {
+    "status": "unavailable",
+    "installedVersion": null,
+    "availableVersion": null,
+    "releaseNotes": null,
+    "checkedAt": null,
+    "source": null,
+    "noticeRequired": false,
+    "noticeText": null,
+    "reason": "cache-unavailable"
+  },
+  "visualReview": "not-requested",
+  "durationMs": 2980,
+  "visualReviewRecommendation": {
+    "action": "inspect-route-readability",
+    "signals": {
+      "resolvedCrossovers": 2,
+      "routesOverSuggestedBends": 2,
+      "routesOverSuggestedStretch": 1
+    },
+    "reason": "Automated gates passed, but crossings or detours still need perceptual review before claiming visual quality.",
+    "affectedRoutes": {
+      "crossings": [
+        {
+          "left": {
+            "id": "ally",
+            "from": "frontend",
+            "to": "covenant",
+            "label": "诚意金 / 背刺",
+            "collectionIndex": 2,
+            "artifactIndex": 3
+          },
+          "right": {
+            "id": "board",
+            "from": "indexer",
+            "to": "gametable",
+            "label": "只读扫描",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "point": [
+            655,
+            164
+          ]
+        },
+        {
+          "left": {
+            "id": "rep",
+            "from": "frontend",
+            "to": "registry",
+            "label": "查声誉",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "right": {
+            "id": "board",
+            "from": "indexer",
+            "to": "gametable",
+            "label": "只读扫描",
+            "collectionIndex": 4,
+            "artifactIndex": 5
+          },
+          "point": [
+            642,
+            325
+          ]
+        }
+      ],
+      "detours": [
+        {
+          "relationship": {
+            "id": "rep",
+            "from": "frontend",
+            "to": "registry",
+            "label": "查声誉",
+            "collectionIndex": 3,
+            "artifactIndex": 4
+          },
+          "bends": 4,
+          "stretch": 1
+        },
+        {
+          "relationship": {
+            "id": "agent-voice",
+            "from": "agent",
+            "to": "kimi",
+            "label": "选着法 + 台词",
+            "collectionIndex": 10,
+            "artifactIndex": 11
+          },
+          "bends": 4,
+          "stretch": 1.737,
+          "directCorridorBlockers": [
+            {
+              "id": "cyberfly",
+              "label": "赛博果蝇连接组",
+              "box": [
+                1140,
+                220,
+                190,
+                80
+              ]
+            }
+          ]
+        }
+      ],
+      "truncated": false
+    },
+    "hints": [
+      "frontend → covenant crosses indexer → gametable: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "frontend → registry crosses indexer → gametable: move the node of whichever is a branch, return, or second entrance to the other side of the main path, so that relationship runs through an empty corridor.",
+      "frontend → registry needs 4 bends: move node frontend or registry so they share a row or column with matching centers, or sit diagonally with a clear corner."
+    ],
+    "repair": "Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit."
+  }
+}

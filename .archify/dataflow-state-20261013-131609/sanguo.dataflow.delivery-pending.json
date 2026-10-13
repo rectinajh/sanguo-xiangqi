@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "command": "deliver",
+  "status": "pending",
+  "receiptId": "d2162dcb-1120-484f-9836-dc34548208ec",
+  "input": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/candidate.json",
+  "output": "/Users/rectinajh/src/sanguo-xiangqi/.archify/dataflow-state-20261013-131609/sanguo.dataflow.html"
+}

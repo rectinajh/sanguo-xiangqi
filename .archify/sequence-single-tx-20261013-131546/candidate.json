@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "一步一签 · 提交与揭示（单笔交易）",
+    "output": ".archify/sequence-single-tx-20261013-131546/sanguo.sequence.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": {
+      "url": "https://github.com/rectinajh/sanguo-xiangqi.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "5fbe2f692ff2f5a452ea588f3a6fd3119698e8e2"
+    }
+  },
+  "participants": [
+    {
+      "id": "wallet",
+      "type": "external",
+      "label": "钱包",
+      "sublabel": "玩家私钥",
+      "icon": "person"
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "前端 SPA",
+      "sublabel": "Vercel",
+      "icon": "frontend",
+      "sources": [
+        {
+          "path": "frontend/src/lib/contracts.ts",
+          "line": 289,
+          "label": "commitAndReveal"
+        }
+      ]
+    },
+    {
+      "id": "rpc",
+      "type": "cloud",
+      "label": "Monad 测试网",
+      "sublabel": "RPC 10143",
+      "icon": "cloud"
+    },
+    {
+      "id": "game",
+      "type": "backend",
+      "label": "GameTable",
+      "sublabel": "合约",
+      "icon": "backend",
+      "sources": [
+        {
+          "path": "contracts/src/GameTable.sol",
+          "line": 489,
+          "label": "commitAndRevealMove"
+        }
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "AI 卧底",
+      "sublabel": "轮询 agent",
+      "icon": "backend",
+      "sources": [
+        {
+          "path": "agent/src/index.ts",
+          "line": 219,
+          "label": "tick"
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 300,
+      "to": 556,
+      "label": "提交：只有哈希上链"
+    },
+    {
+      "from": 612,
+      "to": 866,
+      "label": "揭示：同一笔交易内校验"
+    },
+    {
+      "from": 916,
+      "to": 1050,
+      "label": "推进：轮次交给下一家"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m1",
+      "from": "ui",
+      "to": "wallet",
+      "y": 180,
+      "label": "请求签名（prompt：从 A 走到 B）",
+      "variant": "default"
+    },
+    {
+      "id": "m2",
+      "from": "wallet",
+      "to": "ui",
+      "y": 215,
+      "label": "签名",
+      "variant": "return"
+    },
+    {
+      "id": "m3",
+      "from": "ui",
+      "to": "rpc",
+      "y": 250,
+      "label": "提交交易",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m4",
+      "from": "rpc",
+      "to": "game",
+      "y": 285,
+      "label": "commitAndRevealMove",
+      "variant": "emphasis",
+      "note": "承诺哈希与明文在同一笔交易里一起交，合约当场校验 —— 不存在「先提交、再揭示」那个可被抢跑的窗口"
+    },
+    {
+      "id": "m5",
+      "from": "game",
+      "to": "rpc",
+      "y": 340,
+      "label": "校验几何合法性 + 扣油费",
+      "variant": "default"
+    },
+    {
+      "id": "m6",
+      "from": "game",
+      "to": "rpc",
+      "y": 420,
+      "label": "revert illegal geom（非法着法直接拒绝）",
+      "variant": "dashed"
+    },
+    {
+      "id": "m7",
+      "from": "game",
+      "to": "rpc",
+      "y": 470,
+      "label": "落子 + 记账 + 结算吃子",
+      "variant": "default"
+    },
+    {
+      "id": "m8",
+      "from": "game",
+      "to": "rpc",
+      "y": 520,
+      "label": "MoveRevealed 事件",
+      "variant": "default"
+    },
+    {
+      "id": "m9",
+      "from": "rpc",
+      "to": "ui",
+      "y": 610,
+      "label": "回执 + 事件",
+      "variant": "return"
+    },
+    {
+      "id": "m10",
+      "from": "agent",
+      "to": "game",
+      "y": 660,
+      "label": "轮到我？读盘",
+      "variant": "dashed"
+    },
+    {
+      "id": "m11",
+      "from": "agent",
+      "to": "game",
+      "y": 700,
+      "label": "代走（我自己的签名）",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m12",
+      "from": "ui",
+      "to": "game",
+      "y": 780,
+      "label": "若有人卡住不揭示：expireCommit",
+      "variant": "security",
+      "note": "60 秒未揭示，任何人可清掉这笔承诺并推进轮次 —— 这是「一个人掉线不拖死全桌」的兜底"
+    },
+    {
+      "id": "m13",
+      "from": "ui",
+      "to": "game",
+      "y": 880,
+      "label": "也可以直接 resign 认输",
+      "variant": "security",
+      "note": "认输走破产同一条路径，并放行 finalizeGame —— 剩下的人不必陪走满 80 手"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "ui",
+      "from": 170,
+      "to": 300,
+      "type": "frontend"
+    },
+    {
+      "participant": "game",
+      "from": 270,
+      "to": 530,
+      "type": "backend"
+    },
+    {
+      "participant": "agent",
+      "from": 650,
+      "to": 710,
+      "type": "backend"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "为什么是一笔交易",
+      "items": [
+        "分离式 commit / reveal 有抢跑窗口：别人看到你的明文再决定自己的走法",
+        "commitAndRevealMove 把两步压进同一笔交易，窗口消失",
+        "代价是每手都要签名 —— 这是刻意的摩擦，换来的是不可抵赖"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "卡住的时候",
+      "items": [
+        "60 秒未揭示 → 任何人 expireCommit 清掉并推进",
+        "不想下了 → resign，立刻可结算，钱不用锁到 80 手",
+        "三个人都不在 → 大厅阶段 abandonGame + claimAbandonRefund"
+      ]
+    }
+  ]
+}

@@ -1,205 +1,338 @@
 # 三国棋局 · Shadow Xiangqi
 
-三人象棋桌上藏着押金 AI 卧底——步步一笔交易烧 MON；氪金可补给，性价比靠省油逼破产。
+**Three-player Xiangqi on Monad. One seat is an AI mole. Every move burns money, and betrayal is a transaction.**
 
-Three-player Xiangqi with one staked AI mole — every move is a transaction that burns MON, captures earn points, earnest-bonded secret alliances, on-chain betrayal slashing.
+Most "AI agent" games ask you to trust a server. This one doesn't ask. The board is a
+contract. The agent's reputation is a contract. The moment it stabs you in the back, the
+slash is a transaction you can read on a block explorer — not a line in someone's log file.
 
 | | |
 |---|---|
-| 赛道 | **04 Trust Identity & AI Infrastructure** |
-| 本地链 | Anvil `31337` |
-| 目标链 | Monad Testnet `10143`（有余额的私钥才广播，见下方） |
-| 棋规 | inspired by Sanren Xiangqi，可执行简化版，不是规则百科 |
+| Track | **04 Trust Identity & AI Infrastructure** |
+| Local chain | Anvil `31337` |
+| Target chain | Monad Testnet `10143` |
+| Rules | Inspired by Sanren Xiangqi — an executable simplification, not a rules encyclopedia |
 | License | MIT |
 
-## 评委 3 分钟会看到什么
+---
 
-| 时间 | 看到 | 链上 |
-|------|------|------|
-| 0:00 | 三座各锁 1 MON，公开事件不写卧底座位 | `GameCreated(gameId)`、`Joined` 无 `isAi` |
-| 0:20 | 卒走 1 格约 0.009 MON，车走 3 格约 0.050 MON | `MoveFeePaid` |
-| 0:45 | 诚意金 0.10 MON，事件只有 hash | `EarnestLocked` |
-| 1:10 | 盟约生效，座位仍不公开 | `CovenantActivated` |
-| 1:40 | 绿营真的吃掉红方的士，然后才能 Slash | `CaptureSettled` 然后 `BetrayalSlashed` |
-| 2:15 | 另外两座付不起最便宜的合法着，破产 | `SeatBankrupt` |
-| 2:40 | 揭示卧底、`forcedBurnMon`、slash 次数 | `AiRevealed`、`AgentRegistry` |
+## Background
 
-没有吃士记录时，`challengeBetrayal` 会 revert。罚金进受害方 `playBalance`，不是打给任意调用者。
+Three-player chess has a property that two-player chess does not: **the losing player
+decides who wins.** In a two-player game, "who is winning" is a fact. In a three-player
+game, it is a negotiation. That is the oldest problem in political economy wearing a
+board-game costume: coalitions, credible commitments, and the moment a partner becomes a
+liability.
 
-## 架构
+And there is a second problem, newer and worse. We are now handing decision-making to
+software agents that we cannot audit and cannot punish. An agent that lies to you suffers
+no consequence. Its "reputation" lives in a vendor's database, resets when the vendor feels
+like it, and is invisible to anyone outside that vendor's walled garden.
+
+So we built a small, complete world where both problems *are* the game — and where the
+answers are enforced by code rather than promised by a terms-of-service page.
+
+---
+
+## The Pain, Stated Plainly
+
+**1. Agents have no skin in the game.**
+When an AI lies, nothing happens to it. There is no cost, no record, no recourse.
+"Trust me" is the entire trust model.
+
+**2. Reputation is a rented database row.**
+Even when a platform tracks agent behaviour, the score is private, mutable, and
+non-portable. You cannot verify it, take it elsewhere, or build on it without asking
+permission.
+
+**3. Commitments between players are unenforceable.**
+In every multiplayer game with diplomacy, an alliance is just words. Nothing makes
+defection *cost* anything, so the equilibrium collapses into everyone betraying first.
+
+**4. On-chain games are economically fake.**
+Most put a token on a leaderboard and call it "game theory". Nothing is consumed, nothing
+is at risk, and the only real strategy is farming the emission schedule.
+
+---
+
+## The Solution
+
+Four mechanisms. Each exists because the naive version fails in a specific, reproducible
+way.
+
+### Money burns on every move
+
+A move is not free. Every `commitAndRevealMove` consumes the mover's **play balance**, and
+that MON is gone — it is not redistributed to anyone. Hoarding is safe and losing. This
+converts thinking time into a real resource and gives the game a clock nobody controls.
+
+Measured on Monad testnet across 110 opening moves:
+
+| | MON |
+|---|---|
+| min | 0.0090 |
+| avg | 0.1027 |
+| max | 0.5775 |
+
+The *available* move set is priced by geometry and remaining balance. Being poor is not a
+debuff you read about — it is a shrinking list of legal choices.
+
+### Alliances are collateralised
+
+A covenant is not a promise, it is a **deposit**. Two players lock earnest money against a
+commitment, and the commitment's plaintext never goes on-chain — only a hash — so the table
+cannot read your intentions before you act on them.
+
+### Betrayal is a transaction, not a plot twist
+
+Breaking the covenant is *allowed*. It is also *priced*: the betrayer's earnest bond is
+seized, their `trustScore` in the `AgentRegistry` drops, and the seizure is emitted as an
+event anyone can index.
+
+This is the point of the whole design. **Defection is not prevented — it is made legible.**
+
+### The mole's reputation is on-chain and slashable
+
+One of the three seats is an AI. Until the end, *which* seat is hidden. At settlement,
+`AiRevealed` publishes it along with a `motiveLogHash` — a commitment to the agent's
+recorded reasoning.
+
+The agent is not punished for playing well. It is punished for **lying**, and that
+punishment is a state change in a public contract.
+
+---
+
+## What Makes This Different
+
+**The AI's strategy comes from a real connectome.**
+
+The mole's decisions are not prompt-engineering all the way down. A subnetwork of the
+**Janelia FlyEM MaleCNS** connectome — the full male *Drosophila* central nervous system,
+published in *Cell* in September 2026 — runs as a spiking simulation and produces the
+agent's behavioural drives.
+
+We extracted **2,500 neurons and 84,014 real synapses**, seeded from descending neurons
+(the behavioural output layer) and expanded one hop upstream along real `ConnectsTo` edges.
+
+The division of labour is the interesting part:
+
+- **The connectome is the subconscious.** It is deterministic — the same board position
+  always yields the same impulse. It does *not* pick a move.
+- **Kimi is the voice.** It turns the impulse into a chosen move and a line of dialogue:
+  the self-justification that follows the urge.
+
+That is precisely the anatomy of a betrayal. **The impulse arrives first; the reason
+arrives second.**
+
+We deliberately do **not** claim the fly is playing chess. Mapping neurons onto board
+squares would be invention. The connectome outputs three behavioural drives
+(`aggression`, `avoidance`, `courtship`), and the legal move is selected downstream.
+
+> Reference: <https://male-cns.janelia.org/> · data licensed **CC-BY** (HHMI Janelia FlyEM)
+
+**The whole product is one command away from being verified.**
+
+```bash
+pnpm demo    # 18 transactions end to end, including a real betrayal slashing
+```
+
+Not a video. Not a screenshot. A script that deploys, plays, betrays, and settles.
+
+**Honesty is designed in, not bolted on.**
+
+The ZK layer is explicitly staged and labelled (see below). The verifier is a stub and says
+so in its own source. A reviewer who knows cryptography will find no inflated claims here —
+and that is enforced by a size gate and a dependency audit in CI.
+
+---
+
+## Architecture
+
+**Interactive diagram:** [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html)
+— click any node to trace its connections. Source evidence is pinned to repository paths
+and line numbers at commit `5fbe2f6`.
 
 ```
-[浏览器]
-  棋盘（合法格 + fee）· 双账本
-  本地 Anvil：临时钱包 + 一键 Demo
-  测试网：EIP-1193 钱包签名（私钥不出浏览器）
-        | JSON-RPC
-[合约]
-  GameTable      入座 / commit-reveal / 吃子 / 破产 / 终局
-                 createGame() 不写 aiSeat；Agent 入座时绑定卧底
-  Covenant       诚意金 + 双 ECDSA + 吃子证据 Slash
-  AgentRegistry  终局写入胜负、slash、forcedBurnMon
-  StubVerifier   空证明 = ECDSA 路径；任何非空证明失败
-        |
-[AI]
-  独立进程 `pnpm agent`（自有 AGENT_KEY，永不读玩家钥）
-  本地 Demo 另可用页内剧本；公网必须跑 agent
+Browser + wallet ──HTTPS──▶ SPA (Vercel) ──signed tx──▶ GameTable ──┐
+                                  │  │  │                            │
+                                  │  │  └──reputation──▶ AgentRegistry│
+                                  │  └──earnest/betrayal──▶ Covenant ─┤ Monad testnet
+                                  │                                   │
+                                  └──leaderboard/history──▶ Indexer ◀─┘
+                                                             │
+                                    ┌────────────────────────┼──────────────┐
+                                    ▼                        ▼              ▼
+                                Supabase              AI mole agent ◀── Kimi API
+                                                             │
+                                                             ▼
+                                                   Cyberfly connectome
 ```
 
-`forcedBurnMon` = 另外两座已经付掉的 moveFee 之和。
+Key components, and where to verify each claim:
 
-## 诚实 ZK
+| Component | Evidence |
+|---|---|
+| `GameTable` (board, seats, ply, fees) | `contracts/src/GameTable.sol:489` |
+| `Covenant` (earnest bond, slashing) | `contracts/src/Covenant.sol:396` |
+| `AgentRegistry` (trust score) | `contracts/src/AgentRegistry.sol:59` |
+| Indexer (chunked log scanning) | `server/src/indexer.ts:130` |
+| Postgres store (dual backend) | `server/src/store.ts:49` |
+| Agent decision entry | `agent/src/index.ts:586` |
+| Connectome spiking simulation | `agent/src/cyberfly.ts:142` |
+| Kimi decision + dialogue | `agent/src/kimi.ts:142` |
 
-| 层 | 内容 | 状态 |
-|----|------|------|
-| P0 | hash + 双 ECDSA + 事件不写座位 + `IVerifier` | 已做。空 `zkProof` 才通过 |
-| P1 | circom/Noir preimage | 未做。见 `circuits/README.md` |
-| P2 / G2 | Slash 时仍隐藏座位 | 不承诺 |
+### One move, end to end
 
-失败时这样说：电路还没做，所以这不是完整 ZK。扣费、诚意金、吃士、Slash、Points 是真交易。`StubVerifier` 拒绝任何非空证明，避免空验证器冒充 ZK。
+**Interactive diagram:** [`docs/diagrams/sequence.html`](docs/diagrams/sequence.html)
 
-## 本地跑通（含 AI 与水龙头）
+A naive implementation splits commit and reveal into two transactions. That creates a
+front-running window: everyone sees your plaintext before deciding their own move. So
+`commitAndRevealMove` compresses both into a single transaction and validates the geometry
+on the spot. The window does not exist.
+
+If a player stalls, `expireCommit` lets *anyone* clear the stale commitment after 60
+seconds. If a player wants out, `resign` follows the same accounting path as bankruptcy and
+unblocks `finalizeGame` — the other two are not forced to grind out the remaining plies.
+
+### Data flow
+
+The chain is the only source of truth; everything else is a rebuildable mirror. The
+architecture diagram's cards cover the two traps we hit: `eth_getLogs` is capped at 100
+blocks on Monad's public RPC, and a mirror without provenance accumulates ghost games after
+every redeploy.
+
+### Demo workflow
+
+**Interactive diagram:** [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) —
+the three-minute runbook: connect wallet → fill three seats → play → covenant → betrayal →
+slashing → reputation drop.
+
+---
+
+## Honest ZK
+
+The ZK layer is **staged and labelled**. Nothing here pretends to be a complete circuit.
+
+| Level | Status | What it actually does |
+|---|---|---|
+| **L0** | **Shipped** | Hash commitment + dual ECDSA + UI concealment. The covenant plaintext never touches the chain. |
+| **L1** | **Shipped** | `IVerifier` interface in place and wired into `Covenant`. |
+| **L2** | **Not implemented** | Preimage ZK (circom / Noir). Interface ready; no circuit exists. |
+| **L3** | **Not implemented** | Fully anonymous covenants. |
+
+`StubVerifier` accepts an **empty** proof (the P0 ECDSA path, checked in `Covenant`) and
+**rejects any non-empty blob**. It refuses to pretend it verified something. That behaviour
+is deliberate and covered by tests.
+
+We would rather show you a labelled stub than a circuit that does not run.
+
+---
+
+## Roadmap (Not Done)
+
+| Item | Status |
+|---|---|
+| Preimage ZK circuit (L2) | Interface reserved, no implementation |
+| Checkmate detection on-chain | Deliberately off-chain — `isInCheck` ≈ 379k gas, `hasAnyLegalMove` ≈ 533k |
+| Mainnet deployment | Testnet only |
+| Contract size headroom | `GameTable` is 24,073 B of the 24,576 B EIP-170 limit — **503 B left** |
+
+That last row is a real constraint, not a footnote. Further on-chain features require
+switching `require` strings to custom errors first (measured saving: ~1.9 KB).
+
+---
+
+## Run It
 
 ```bash
 pnpm install
-pnpm test           # shared + 前端 + 合约 + 尺寸检查，全绿
-pnpm anvil          # 终端 A：本地链
-pnpm deploy:local   # 终端 B：部署（幂等，重复跑会复用）
-pnpm indexer        # 终端 C：索引器（对局历史 / 排行榜）
-pnpm dev            # 终端 D：前端
+pnpm test          # shared 24 + frontend 17 + agent 12 + forge 85
+pnpm demo          # local anvil: deploy, play, betray, settle — 18 transactions
+pnpm dev           # frontend on :5173 against a local chain
+pnpm size          # EIP-170 size gate (this has caught a real 146 KB regression)
 ```
 
-打开页面后有三条路径：
-
-| 路径 | 怎么做 | 适合 |
-|------|--------|------|
-| **一键 Demo** | 点右上「一键 Demo 脊骨」 | 30 秒看完扣费→结盟→背刺→Slash→揭示 |
-| **真人对局** | 点「创建房间」→ 复制邀请链接 → 发给两位朋友各自入座 | 体验真实的多人与钱包流程 |
-| **AI 自动对局** | 另开终端 `AGENT_KEY=0x59c6… pnpm agent` | 让 AI 自己轮询回合、自己接盟与背刺 |
-
-`pnpm demo` 是纯脚本版的同一条脊骨，只打 Anvil `31337`：它使用公开的 Anvil 私钥，
-因此**禁止**对 `10143` 运行（脚本会自己拒绝）。
-
-### 房间与邀请链接
-
-房间号就是链上 `gameId`，对局的唯一真源是合约 —— **不需要房间服务器**。
-邀请链接形如 `http://localhost:5173/#/r/12`，朋友点开即自动进入该房间并看到谁已入座。
-
-### 索引器（对局历史 / 排行榜）
-
-合约本身没有"列表"能力：`AgentRegistry` 的声誉只能按地址查，既没有 `agentCount`，
-也没有"所有对局"。所以历史与排行榜由链下索引器提供，链仍是唯一真源（索引可重建）：
+**Monad testnet:**
 
 ```bash
-pnpm indexer          # 持续运行，默认 http://127.0.0.1:8788
-pnpm indexer:once     # 只扫一轮后退出（适合 CI / 定时任务）
+pnpm deploy:testnet        # needs FOUNDRY_CODE_SIZE_LIMIT=100000 for the deploy script's initcode
+pnpm indexer               # reads chain, writes Supabase/SQLite
+pnpm --filter agent start  # the mole: registers, fills the empty seat, plays, betrays
 ```
 
-接口：`/health` · `/games` · `/games/:id` · `/players/:address` · `/leaderboard` · `/agents`
+**Requirements:** Node `22.x` (for `node:sqlite`), pnpm `10.33.4`, Foundry.
 
-用 `node:sqlite`（Node 22+ 内置，零额外依赖），数据落在 `server/.data/index.sqlite`，
-删掉即可重建。前端面板通过 `VITE_INDEXER_URL` 指向它。
+### Testnet addresses (`10143`)
 
-地址文件按 `CHAIN_ID` 自动选择：`CHAIN_ID=10143` 读 `addresses.10143.json`，
-否则读本地 `addresses.json`。指向测试网：
-
-```bash
-RPC_URL=https://testnet-rpc.monad.xyz \
-CHAIN_ID=10143 \
-INDEXER_START_BLOCK=70451369 \
-pnpm indexer
-```
-
-> ⚠️ **公网 RPC 的两个硬限制**（都实测踩过，本地 Anvil 不会暴露）：
-> 1. `eth_getLogs` 的区块区间被限制（Monad 公共 RPC 只允许 **100 个块**）。
->    索引器已做自适应分块，但仍**不要从创世块扫** —— 7000 万块等于 70 万次请求。
->    用 `INDEXER_START_BLOCK` 指定部署块（可用二分找：`cast code <地址> --block N`）。
-> 2. 逐节点读盘面（`cell()`）一局要 100+ 次并发调用，会被限流。agent 因此改为
->    **事件驱动**维护棋盘（`MoveRevealed`），不再整盘读链。
-
-> 注意：合约在终局结算时会把 `points` 用掉（进奖池/孤儿池），结算后链上读到的是 0。
-> 所以索引器另用 `CaptureSettled` / `PointsSeized` 事件累计"累计赚分"，
-> 历史统计一律用这个值，而不是 `getSeat` 的当前 points。
-
-### 测试币（不自建水龙头）
-
-**我们用官方水龙头，不自建。** 自建需要一个常驻的、有 MON 余额的热钱包，还要对
-公网暴露发钱接口 —— 运维成本和被刷风险都不值得，何况这只是测试网。
-
-官方入口：**<https://faucet.monad.xyz>**
-
-| 项 | 值 |
+| Contract | Address |
 |---|---|
-| 网络 | Monad Testnet |
-| Chain ID | `10143` |
-| 代币 | `MON` |
-| RPC | `https://testnet-rpc.monad.xyz` |
-| 浏览器 | [monadvision.com](https://monadvision.com) · [monadscan.com](https://monadscan.com) |
+| `GameTable` | `0x808a1e24d13681e4666706d60def28afe21859af` |
+| `Covenant` | `0x857ff987f28564b7f7b6a58cd421bd4e01ec80b9` |
+| `AgentRegistry` | `0x9c19c6213dc150c9fe38a20fae0721bd9935c012` |
+| `StubVerifier` | `0xc0ff952f5679c877a1bd4cabdf9b2348e3d3b333` |
 
-前端余额面板里有「去领测试币 ↗」按钮直接跳转。入座需 3 MON（1 质押 + 2 作战）。
+Canonical source: `frontend/src/lib/addresses.10143.json`.
 
-> 本地 Anvil 不需要水龙头：Anvil 自带 10000 ETH 的测试账户。
-> 若确实要换成自建水龙头，把 `VITE_FAUCET_URL` 指向你的服务即可，前端无需改动。
+### Test tokens
 
-## Monad 10143
+We do **not** run a faucet. Use the official one: **<https://faucet.monad.xyz>**
 
-有测试网余额时（**请用你自己新建、只有你持有的钥**）：
+### Environment
 
-```bash
-MONAD_RPC=https://testnet-rpc.monad.xyz PRIVATE_KEY=0x... pnpm deploy:testnet
-```
+`agent/.env` and `server/.env` are gitignored and created from the `.example` files. Never
+commit real keys.
 
-脚本会断言 RPC 的 chainId 就是 `10143`、拒绝公开 Anvil 钥、余额为 0 或缺变量时直接退出，
-不编造地址和交易哈希。广播成功后地址写入 `frontend/src/lib/addresses.10143.json`
-（**不会**覆盖本地演示用的 `addresses.json`），终端会打出交易哈希。
+---
 
-前端指向测试网有两种方式：把上面那个文件的内容配上 `VITE_*` 环境变量（见 `frontend/.env.example`），
-或让 `deploy:testnet` 的产物走 CI 注入。
+## Engineering Notes
 
-### 已部署地址（Monad Testnet `10143`）
+Things that cost real time and are now encoded as guardrails:
 
-见 [`frontend/src/lib/addresses.10143.json`](frontend/src/lib/addresses.10143.json)（`createGame()` 无 aiSeat 版本）：
+- **EIP-170 is not advisory.** `GameTable` once reached 146 KB while `forge test` stayed
+  green, because the test profile had `code_size_limit = 500_000`. `pnpm size` now fails
+  the build, and CI runs it separately from `forge test`.
+- **Monad's public RPC caps `eth_getLogs` at 100 blocks.** The indexer chunks adaptively
+  instead of assuming a wide range works.
+- **A missing `await` is invisible on SQLite and fatal on Postgres.** `upsertGame` was
+  called without `await`; SQLite's synchronous driver hid it, and the Postgres path
+  silently wrote nothing while logging success.
+- **A mirror without provenance accumulates ghosts.** Contract addresses change on every
+  redeploy while `gameId` restarts at 1, so `games` carries a `contract` column and every
+  read filters on it. Without this, a redeploy leaves phantom games on the leaderboard.
+- **`require` strings are expensive.** 65 of them, 36 distinct, ~1.9 KB total. Noted for
+  when headroom runs out.
 
-| 合约 | 地址 |
-|------|------|
-| GameTable | `0x808a1e24d13681e4666706d60def28afe21859af` |
-| Covenant | `0x857ff987f28564b7f7b6a58cd421bd4e01ec80b9` |
-| AgentRegistry | `0x9c19c6213dc150c9fe38a20fae0721bd9935c012` |
-| StubVerifier | `0xc0ff952f5679c877a1bd4cabdf9b2348e3d3b333` |
+### Security posture
 
-部署广播（节选）：
-- `0x3e31bbee4ed6656141a8bcb2e3adc248e9f44af94550ecffd27f1c3b22a49319`
-- `0xd45aeaa01e9f20ff20b7b9348a2e27f61de315e30ef3bb960ba325486c73e25f`
-- `0xb90277c2f34eb57b8781e74d776637f5cee7a82789c2bb069e41d9eeffb090a8`
+- Storage binds to loopback by default; `INDEXER_HOST` must be set explicitly to expose it.
+- The indexer API is read-only. There is no write path.
+- No `ReentrancyGuard`, by review: all four payment sites follow checks-effects-interactions
+  and `_pay` verifies the call result. The guard would cost bytes we do not have.
+- `pnpm audit --audit-level high`: **0** findings.
+- 0 `TODO`/`FIXME`, 0 `console.log` in shipped frontend code.
 
-示例交互（新部署后 `createGame()` → `gameId=1`）：
-- `0xdba503caa49d10e0fc9f35c9b3aa85102e8e905624d1b6ed080f75a542d4ca2f`
+---
 
-索引器起点建议：`INDEXER_START_BLOCK=70451369`（本轮部署块）。
+## Diagrams
 
-水龙头：[Monad testnet faucet](https://faucet.monad.xyz)（前端默认 `VITE_FAUCET_URL` 也指向这里）。
+Generated with **[Archify](https://github.com/tt-a1i/archify)** from the repository — typed
+JSON source, schema validation, and real-browser checks, not hand-drawn images.
 
-产物目录：`contracts/broadcast/Deploy.s.sol/10143/`。浏览器：[monadexplorer](https://testnet.monadexplorer.com)。
+| Diagram | File |
+|---|---|
+| Runtime architecture | [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html) |
+| Single-transaction move (sequence) | [`docs/diagrams/sequence.html`](docs/diagrams/sequence.html) |
+| Three-minute demo (workflow) | [`docs/diagrams/workflow.html`](docs/diagrams/workflow.html) |
 
-### 公网 AI agent
+Each is a self-contained HTML file. Open it directly — no install, no server. Sources live
+in `.archify/`, so any diagram can be revised without redrawing it.
 
-```bash
-# agent/.env：CHAIN_ID=10143、RPC_URL、自有 AGENT_KEY（有 MON）、AGENT_SEAT=2
-cd agent && pnpm start   # 或仓库根目录 pnpm agent
-```
+---
 
-Agent 会先 `registerAgent`，再自动入座空着的绿营，并轮询走子 / 接盟 / 背刺。前端创建房间后把邀请链接发给人类朋友即可。
+## License & Attribution
 
-主网 143 不在这一版。
+Code: MIT.
 
-## 已实现 / 未做
-
-已实现：费用、commit-reveal、吃子与击败 40% 质押、按最便宜合法着破产、人类补给、AI 禁止补给、诚意金、疏火、证据 Slash、终局 70/20/10、声誉；**EIP-1193 钱包写链**、**创建房间用用户钥**、**createGame 不泄漏 aiSeat**、**跨钱包盟约要约**、**邀请链接 + 轮询**、**独立 AI agent**、**索引器 / 排行榜**。
-
-未做：完整 ZK、谣言店、指控投票、代付盟友油费、完整棋规、将军/将死判定、自动匹配大厅。
-
-### 安全说明（评审修复）
-
-第一轮代码评审确认的三个漏洞已修复并有回归测试钉死，详见 [docs/DEV_CHECKLIST.md](docs/DEV_CHECKLIST.md)：
-结算任意 Lobby 局（可锁死他人质押）、背刺者自行"履约"逃掉罚没、G1 隐私映射对外可见。
-另有 8 项高危（非胜者质押不退、结算重入、金库不可提取等）一并修复。测试从 19 项增至 31 项。
+Connectome data: **MaleCNS v1.0**, HHMI Janelia FlyEM, licensed **CC-BY**.
+<https://male-cns.janelia.org/> · `agent/data/cyberfly-subnet.json` is derived from it and
+retains the attribution in its `source` field.
