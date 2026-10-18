@@ -400,4 +400,67 @@ button.danger {
 }
 .cyberfly-drive em { font-style: normal; color: var(--muted); text-align: right; font-family: var(--mono); font-size: 0.72rem; }
 .cyberfly-disclaimer { margin: 0; font-size: 0.68rem; color: var(--muted); line-height: 1.35; }
-.cyberfly-browser-btn { width: 100%; opacity: 0.55; cursor: not-allowed; }
+.cyberfly-browser-btn { width: 100%; }
+
+
+/* —— cyberfly neuron browser (fullscreen) —— */
+.neuron-browser {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; flex-direction: column;
+  background: #070b12; color: var(--text, #e8eef6);
+}
+.neuron-browser-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border, #243044);
+  background: rgba(10,16,24,0.95);
+}
+.neuron-browser-bar h2 { margin: 0; font-size: 1rem; white-space: nowrap; }
+.neuron-browser-search {
+  flex: 1; min-width: 0;
+  padding: 0.45rem 0.7rem; border-radius: 8px;
+  border: 1px solid var(--border, #243044);
+  background: rgba(255,255,255,0.04); color: inherit;
+  font-family: var(--mono, ui-monospace, monospace); font-size: 0.85rem;
+}
+.neuron-browser-body {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 1fr minmax(240px, 300px);
+}
+.neuron-browser-canvas { min-height: 0; background: #0a1018; }
+.neuron-browser-canvas .cyberfly-loading { height: 100%; }
+.neuron-browser-side {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 12px 14px; border-left: 1px solid var(--border, #243044);
+  overflow: auto; background: rgba(10,16,24,0.9);
+}
+.neuron-browser-side h3 { margin: 0 0 8px; font-size: 0.82rem; color: var(--muted, #8a9bb0); font-weight: 600; }
+.neuron-browser-empty { margin: 0; font-size: 0.8rem; color: var(--muted, #8a9bb0); }
+.neuron-browser-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow: auto; }
+.neuron-browser-hits button {
+  width: 100%; text-align: left;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 0.4rem 0.55rem; border-radius: 8px;
+  border: 1px solid transparent; background: rgba(255,255,255,0.03);
+  color: inherit; cursor: pointer; font-size: 0.78rem;
+}
+.neuron-browser-hits button strong { font-family: var(--mono, ui-monospace, monospace); font-weight: 600; }
+.neuron-browser-hits button span { color: var(--muted, #8a9bb0); font-size: 0.72rem; }
+.neuron-browser-hits button.on,
+.neuron-browser-hits button:hover {
+  border-color: rgba(127,208,255,0.35);
+  background: rgba(127,208,255,0.08);
+}
+.neuron-browser-detail { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.neuron-browser-detail > div {
+  display: grid; grid-template-columns: 4.5rem 1fr; gap: 6px;
+  font-size: 0.8rem;
+}
+.neuron-browser-detail dt { margin: 0; color: var(--muted, #8a9bb0); }
+.neuron-browser-detail dd {
+  margin: 0; font-family: var(--mono, ui-monospace, monospace);
+  word-break: break-all;
+}
+@media (max-width: 720px) {
+  .neuron-browser-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .neuron-browser-side { border-left: none; border-top: 1px solid var(--border, #243044); max-height: 40vh; }
+}
