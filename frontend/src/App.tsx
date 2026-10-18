@@ -731,8 +731,8 @@ export default function App() {
           topEdges: 500,
         });
         setSpikeFrame(frame);
-        // brief drama before move commits
-        await new Promise((r) => setTimeout(r, 450));
+        // Hold thinking long enough for traveling-current pulses to read (~1.5s)
+        await new Promise((r) => setTimeout(r, 1550));
       }
       const pick = pickAiMove(board, {
         allySeat: covenantActive ? 0 : null,

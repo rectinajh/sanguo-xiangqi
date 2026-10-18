@@ -43,12 +43,20 @@ type Subnet = {
 
 type Filaments = {
   segmentCount: number;
-  positions: Float32Array; // length segmentCount*6
-  groups: Uint8Array; // per segment 0..3
-  neuronIndex: Uint16Array; // per segment → layout index
+  positions: Float32Array;
+  groups: Uint8Array;
+  neuronIndex: Uint16Array;
 };
 
 const GROUP_NAMES = ["P1", "DN", "GABA", "other"] as const;
+
+/** Cyan-white flash for traveling “current” along cables. */
+const FLASH = new THREE.Color("#d8fbff");
+const FLASH_HOT = new THREE.Color("#ffffff");
+
+function fract(x: number): number {
+  return x - Math.floor(x);
+}
 
 async function loadFilaments(url: string): Promise<Filaments> {
   const buf = await fetch(url).then((r) => {
@@ -76,7 +84,7 @@ async function loadFilaments(url: string): Promise<Filaments> {
   for (let i = 0; i < segmentCount; i++) {
     groups[i] = view.getUint8(offset++);
   }
-  if (offset % 2) offset += 1; // pad to align u16
+  if (offset % 2) offset += 1;
   const neuronIndex = new Uint16Array(segmentCount);
   for (let i = 0; i < segmentCount; i++) {
     neuronIndex[i] = view.getUint16(offset, true);
@@ -107,28 +115,52 @@ function Neurons({
   const mesh = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
+  const ratesRef = useRef(rates);
+  const dramaRef = useRef(drama);
+  ratesRef.current = rates;
+  dramaRef.current = drama;
 
-  useEffect(() => {
+  useFrame(({ clock }) => {
     const m = mesh.current;
     if (!m) return;
     const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
+    const ratesNow = ratesRef.current;
+    const dramaNow = dramaRef.current;
+    const t = clock.elapsedTime;
+    const pulseOn = dramaNow > 0.06;
+
     for (let i = 0; i < layout.count; i++) {
       const [x, y, z] = layout.positions[i];
       const nid = subnet.neurons[i]?.id;
-      const r = rates?.[i] ?? 0;
+      const r = ratesNow?.[i] ?? 0;
       const isSelected = nid !== undefined && nid === selectedId;
       const inFocus = !focusing || (nid !== undefined && focusNeighborIds!.has(nid));
-      let scale = 0.038 + r * 0.085 * (0.4 + drama);
+
+      let pulse = 0;
+      if (pulseOn && r > 0.1) {
+        // Soma scintillation — sharp peaks like discharge
+        const phase = fract(t * 3.2 + i * 0.191 + y * 0.4);
+        const wave = Math.max(0, 1 - Math.abs(phase - 0.5) * 5);
+        const spark = Math.pow(Math.max(0, Math.sin(t * 16 + i * 2.7)), 10);
+        pulse = (wave * wave * 0.75 + spark * 0.9) * r * dramaNow;
+      }
+
+      let scale = 0.038 + r * 0.085 * (0.4 + dramaNow) + pulse * 0.07;
       if (isSelected) scale *= 1.9;
       else if (inFocus && focusing) scale *= 1.3;
       if (!inFocus) scale *= 0.45;
+
       dummy.position.set(x, y, z);
       dummy.scale.setScalar(scale);
       dummy.updateMatrix();
       m.setMatrixAt(i, dummy.matrix);
+
       color.set(populationColor(layout.groups[i]));
-      // Bright idle so population colors always read on anatomical silhouette
-      let boost = 1.05 + r * 1.15 * (0.35 + drama);
+      let boost = 1.05 + r * 1.15 * (0.35 + dramaNow);
+      if (pulse > 0.05) {
+        color.lerp(FLASH_HOT, Math.min(0.85, pulse));
+        boost += pulse * 1.4;
+      }
       if (isSelected) boost = Math.max(boost, 1.85);
       else if (inFocus && focusing) boost = Math.max(boost, 1.25);
       if (!inFocus) boost *= 0.25;
@@ -137,7 +169,7 @@ function Neurons({
     }
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
-  }, [layout, subnet, rates, drama, dummy, color, selectedId, focusNeighborIds]);
+  });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     if (!interactive || !onSelect) return;
@@ -161,10 +193,11 @@ function Neurons({
   );
 }
 
-/** Real MaleCNS SWC cables — visual star of the idle look. */
+type SegMeta = { ni: number; g: number; mx: number; my: number; mz: number };
+
+/** Real MaleCNS SWC cables + traveling current while thinking. */
 function SkeletonFilaments({
   filaments,
-  layout,
   subnet,
   rates,
   drama,
@@ -179,17 +212,24 @@ function SkeletonFilaments({
   maxSegments: number;
   focusNeighborIds?: Set<number> | null;
 }) {
+  const lineRef = useRef<THREE.LineSegments>(null);
+  const matRef = useRef<THREE.LineBasicMaterial>(null);
   const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
   const palette = useMemo(
     () => GROUP_NAMES.map((g) => new THREE.Color(populationColor(g))),
     [],
   );
+  const tmp = useMemo(() => new THREE.Color(), []);
+  const ca = useMemo(() => new THREE.Color(), []);
+  const cb = useMemo(() => new THREE.Color(), []);
+  const ratesRef = useRef(rates);
+  const dramaRef = useRef(drama);
+  ratesRef.current = rates;
+  dramaRef.current = drama;
 
-  const { positions, colors } = useMemo(() => {
+  const { positions, meta } = useMemo(() => {
     const total = filaments.segmentCount;
     const cap = Math.min(total, Math.max(2000, maxSegments));
-    // When focusing, prefer segments of focused neurons; else take first `cap`
-    // (already stratified at build time across the full subnet).
     const chosen: number[] = [];
     if (focusing) {
       for (let i = 0; i < total && chosen.length < cap; i++) {
@@ -197,9 +237,8 @@ function SkeletonFilaments({
         const nid = subnet.neurons[ni]?.id;
         if (nid !== undefined && focusNeighborIds!.has(nid)) chosen.push(i);
       }
-      // Pad with a thin global sample so anatomy still reads
       const pad = Math.min(cap, Math.floor(cap * 0.15));
-      for (let i = 0; i < total && chosen.length < cap; i += Math.max(1, Math.floor(total / pad))) {
+      for (let i = 0; i < total && chosen.length < cap; i += Math.max(1, Math.floor(total / Math.max(1, pad)))) {
         chosen.push(i);
       }
     } else {
@@ -208,52 +247,109 @@ function SkeletonFilaments({
     }
 
     const pos = new Float32Array(chosen.length * 6);
-    const col = new Float32Array(chosen.length * 6);
-    const tmp = new THREE.Color();
+    const metas: SegMeta[] = new Array(chosen.length);
     for (let c = 0; c < chosen.length; c++) {
       const i = chosen[c];
       const base = i * 6;
       const o = c * 6;
       for (let k = 0; k < 6; k++) pos[o + k] = filaments.positions[base + k];
-
-      const g = filaments.groups[i] ?? 3;
-      tmp.copy(palette[g] ?? palette[3]);
-      if (g === 3) tmp.multiplyScalar(0.78);
-
-      const ni = filaments.neuronIndex[i];
-      const nid = subnet.neurons[ni]?.id;
-      const r = rates?.[ni] ?? 0;
-      let boost = 0.92 + r * 1.1 * (0.35 + drama);
-      if (focusing) {
-        const inFocus = nid !== undefined && focusNeighborIds!.has(nid);
-        boost *= inFocus ? 1.25 : 0.22;
-      }
-      tmp.multiplyScalar(boost);
-      // both endpoints same color
-      col[o] = tmp.r;
-      col[o + 1] = tmp.g;
-      col[o + 2] = tmp.b;
-      col[o + 3] = tmp.r;
-      col[o + 4] = tmp.g;
-      col[o + 5] = tmp.b;
+      const ax = pos[o];
+      const ay = pos[o + 1];
+      const az = pos[o + 2];
+      const bx = pos[o + 3];
+      const by = pos[o + 4];
+      const bz = pos[o + 5];
+      metas[c] = {
+        ni: filaments.neuronIndex[i],
+        g: filaments.groups[i] ?? 3,
+        mx: (ax + bx) * 0.5,
+        my: (ay + by) * 0.5,
+        mz: (az + bz) * 0.5,
+      };
     }
-    return { positions: pos, colors: col };
-  }, [filaments, layout, subnet, rates, drama, maxSegments, focusNeighborIds, focusing, palette]);
+    return { positions: pos, meta: metas };
+  }, [filaments, subnet, maxSegments, focusNeighborIds, focusing]);
 
   const geom = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(positions.length), 3));
     return g;
-  }, [positions, colors]);
+  }, [positions]);
 
-  const opacity = focusing ? 0.62 + drama * 0.25 : 0.42 + drama * 0.35;
+  const metaRef = useRef(meta);
+  metaRef.current = meta;
+
+  useFrame(({ clock }) => {
+    const line = lineRef.current;
+    if (!line) return;
+    const attr = line.geometry.getAttribute("color") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    const ratesNow = ratesRef.current;
+    const dramaNow = dramaRef.current;
+    const t = clock.elapsedTime;
+    const pulseOn = dramaNow > 0.06;
+    const metas = metaRef.current;
+    const n = metas.length;
+
+    for (let c = 0; c < n; c++) {
+      const m = metas[c];
+      tmp.copy(palette[m.g] ?? palette[3]);
+      if (m.g === 3) tmp.multiplyScalar(0.78);
+
+      const r = ratesNow?.[m.ni] ?? 0;
+      let boost = 0.92 + r * 1.05 * (0.35 + dramaNow);
+      if (focusing) {
+        const nid = subnet.neurons[m.ni]?.id;
+        const inFocus = nid !== undefined && focusNeighborIds!.has(nid);
+        boost *= inFocus ? 1.25 : 0.22;
+      }
+
+      let flashA = 0;
+      let flashB = 0;
+      if (pulseOn && r > 0.12) {
+        // Traveling pulse along cables (spatial phase + neuron offset)
+        const phase = fract(t * 2.6 + m.ni * 0.137 + m.my * 0.55 + m.mx * 0.32 + m.mz * 0.18);
+        // Narrow hump → looks like a charge packet sliding along the nerve
+        let hump = 1 - Math.abs(phase - 0.5) * 4.2;
+        hump = Math.max(0, hump);
+        hump = hump * hump;
+        // Sharp electrical sparkle
+        const spark = Math.pow(Math.max(0, Math.sin(t * 18 + m.ni * 3.3 + m.my * 2)), 14);
+        const amt = Math.min(1.15, (hump * 0.95 + spark * 0.7) * r * (0.55 + dramaNow * 0.9));
+        // Directional: leading vs trailing endpoint of the segment
+        flashA = amt * (0.35 + (1 - phase) * 0.9);
+        flashB = amt * (0.35 + phase * 0.9);
+        boost += amt * 0.35;
+      }
+
+      const o = c * 6;
+      ca.copy(tmp).multiplyScalar(boost);
+      if (flashA > 0.04) ca.lerp(flashA > 0.7 ? FLASH_HOT : FLASH, Math.min(1, flashA));
+      arr[o] = ca.r;
+      arr[o + 1] = ca.g;
+      arr[o + 2] = ca.b;
+      cb.copy(tmp).multiplyScalar(boost);
+      if (flashB > 0.04) cb.lerp(flashB > 0.7 ? FLASH_HOT : FLASH, Math.min(1, flashB));
+      arr[o + 3] = cb.r;
+      arr[o + 4] = cb.g;
+      arr[o + 5] = cb.b;
+    }
+    attr.needsUpdate = true;
+
+    if (matRef.current) {
+      matRef.current.opacity = focusing
+        ? 0.62 + dramaNow * 0.28
+        : 0.42 + dramaNow * 0.4;
+    }
+  });
 
   return (
-    <lineSegments geometry={geom}>
+    <lineSegments ref={lineRef} geometry={geom}>
       <lineBasicMaterial
+        ref={matRef}
         transparent
-        opacity={opacity}
+        opacity={0.45}
         vertexColors
         toneMapped={false}
         depthWrite={false}
@@ -296,7 +392,6 @@ export function ConnectomeScene({
   const { displayRates, drama } = useSpikePlayback(frame, thinking);
   const fpsSamples = useRef<number[]>([]);
 
-  // focusEdgeIndices kept in API for NeuronBrowser compat (synapse overlay unused when SWC present)
   void focusEdgeIndices;
 
   useEffect(() => {
@@ -365,7 +460,7 @@ export function ConnectomeScene({
         <ambientLight intensity={0.75} />
         <pointLight position={[5, 7, 4]} intensity={1.2} />
         <pointLight position={[-4, -3, 5]} intensity={0.4} />
-        <Spin enabled={autoSpin}>
+        <Spin enabled={autoSpin && drama < 0.35}>
           <SkeletonFilaments
             filaments={filaments}
             layout={layout}
