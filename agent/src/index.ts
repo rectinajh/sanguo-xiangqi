@@ -30,11 +30,12 @@ import {
 import { ABIS, loadConfig, makeClients, type AgentConfig } from "./chain.js";
 import { decideWithKimi, loadKimiConfig, type KimiConfig } from "./kimi.js";
 import {
+  buildSpikeFrame,
   drivesToBias,
   loadConnectome,
   loadSubnetFromFile,
   sensorySeed,
-  simulate,
+  simulateDetailed,
   syntheticSubnet,
   type ConnectomeSubnet,
   type SensoryInput,
@@ -578,7 +579,13 @@ class MoleAgent {
     const sensory = this.subnet ? this.sensoryInput(board, allySeat, ply, realSeats) : null;
     const bias =
       this.subnet && sensory
-        ? drivesToBias(simulate(this.subnet, sensory, { seed: sensorySeed(sensory, gameId, ply) }), sensory)
+        ? (() => {
+            const seed = sensorySeed(sensory, gameId, ply);
+            const detailed = simulateDetailed(this.subnet!, sensory, { seed });
+            // SpikeFrame available for future event channel / logging
+            void buildSpikeFrame(this.subnet!, sensory, { seed, ply, gameId: gameId.toString(), topEdges: 200 });
+            return drivesToBias(detailed.drives, sensory);
+          })()
         : undefined;
 
     if (this.kimi) {

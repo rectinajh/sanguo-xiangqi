@@ -28,6 +28,14 @@ import { AllianceModal } from "./components/AllianceModal";
 import { EndgameReveal } from "./components/EndgameReveal";
 import { PlayerProfile } from "./components/PlayerProfile";
 import { ToastHost } from "./components/Toast";
+import { CyberflyBrainPanel } from "./components/cyberfly/CyberflyBrainPanel";
+import { boardToSensory } from "./lib/cyberflySensory";
+import {
+  buildSpikeFrame,
+  sensorySeed,
+  type ConnectomeSubnet,
+  type SpikeFrame,
+} from "@sanguo/shared";
 import { useToasts } from "./hooks/useToasts";
 import {
   loadOrCreateWallet,
@@ -188,6 +196,26 @@ export default function App() {
   const [slashedCount, setSlashedCount] = useState<number | undefined>(undefined);
   const [forcedBurn, setForcedBurn] = useState<bigint | undefined>(undefined);
   const [demoSteps, setDemoSteps] = useState<DemoStep[]>([]);
+
+  const [spikeFrame, setSpikeFrame] = useState<SpikeFrame | null>(null);
+  const [aiThinking, setAiThinking] = useState(false);
+  const subnetRef = useRef<ConnectomeSubnet | null>(null);
+
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await fetch("/cyberfly/subnet.json").then((r) => r.json());
+        if (!cancelled) subnetRef.current = raw as ConnectomeSubnet;
+      } catch {
+        /* sidebar soft-fails without subnet */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ── 房间 / 邀请 / 水龙头 ─────────────────────────────────────
   /** 当前要进入的房间号（= 链上 gameId） */
@@ -690,13 +718,32 @@ export default function App() {
 
   async function aiPlayOnce() {
     if (gameId === null || board.turn !== AI_SEAT || busy) return;
-    const pick = pickAiMove(board, {
-      allySeat: covenantActive ? 0 : null,
-      activatedPly,
-      forceBetrayal: false,
-    });
-    if (!pick) return;
-    await onMove(pick.from, pick.to, board.cells[pick.from.x].piece);
+    setAiThinking(true);
+    try {
+      const sub = subnetRef.current;
+      if (sub) {
+        const sensory = boardToSensory(board, covenantActive ? 0 : null);
+        const seed = sensorySeed(sensory, gameId, board.ply);
+        const frame = buildSpikeFrame(sub, sensory, {
+          seed,
+          ply: board.ply,
+          gameId: gameId.toString(),
+          topEdges: 500,
+        });
+        setSpikeFrame(frame);
+        // brief drama before move commits
+        await new Promise((r) => setTimeout(r, 450));
+      }
+      const pick = pickAiMove(board, {
+        allySeat: covenantActive ? 0 : null,
+        activatedPly,
+        forceBetrayal: false,
+      });
+      if (!pick) return;
+      await onMove(pick.from, pick.to, board.cells[pick.from.x].piece);
+    } finally {
+      setAiThinking(false);
+    }
   }
 
   async function doTopUp() {
@@ -1400,6 +1447,7 @@ export default function App() {
         </div>
 
         <div className="sidebar">
+          <CyberflyBrainPanel frame={spikeFrame} thinking={aiThinking} />
           <ScorePanel
             seats={seats.map((s) => ({ ...s, isYou: s.seat === activeSeat }))}
             turn={turn}
