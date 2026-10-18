@@ -50,19 +50,16 @@ type Filaments = {
 
 const GROUP_NAMES = ["P1", "DN", "GABA", "other"] as const;
 
-/** Soft light-blue flash for traveling current along cables. */
-const FLASH = new THREE.Color("#7ec8ff");
-const FLASH_HOT = new THREE.Color("#a8d8ff");
+/** Soft light-blue current (readable on dark anatomy). */
+const FLASH = new THREE.Color("#6ebfff");
+const FLASH_HOT = new THREE.Color("#b8e4ff");
 /** Normalize cable distance so tips≈1 and soma≈0 for inward conduction. */
 const SOMA_RADIUS = 2.2;
+/** Simultaneous traveling fronts per neuron (multi-path / multi-angle). */
+const NUM_FRONTS = 4;
 
 function fract(x: number): number {
   return x - Math.floor(x);
-}
-
-/** Shared wave clock: 0 at periphery → 1 at soma (then wraps). */
-function conductionFront(t: number, neuronIndex: number): number {
-  return fract(t * 2.15 + neuronIndex * 0.173);
 }
 
 function radialFromSoma(
@@ -76,13 +73,47 @@ function radialFromSoma(
   return Math.min(1, Math.hypot(x - sx, y - sy, z - sz) / SOMA_RADIUS);
 }
 
-/** Narrow pulse envelope around the traveling front. */
+/** Wider envelope so many segments stay lit as fronts sweep. */
 function pulseAt(front: number, target: number): number {
   let d = Math.abs(front - target);
-  if (d > 0.5) d = 1 - d; // wrap
-  let h = 1 - d * 5.8;
+  if (d > 0.5) d = 1 - d;
+  let h = 1 - d * 3.1;
   if (h <= 0) return 0;
   return h * h;
+}
+
+/**
+ * Continuous multi-path conduction: several phase-offset fronts per neuron,
+ * plus a soft shimmer so mid-window never goes dark.
+ * front 0 = periphery, 1 = soma.
+ */
+function conductionStrength(
+  t: number,
+  neuronIndex: number,
+  radial: number,
+  mx: number,
+  my: number,
+  mz: number,
+): { peak: number; arrive: number } {
+  const angle = Math.atan2(mz, mx) + my * 0.35;
+  const target = 1 - radial;
+  let peak = 0;
+  let arrive = 0;
+  for (let k = 0; k < NUM_FRONTS; k++) {
+    const front = fract(t * 1.75 + neuronIndex * 0.119 + k / NUM_FRONTS + angle * 0.09);
+    peak = Math.max(peak, pulseAt(front, target));
+    arrive = Math.max(arrive, pulseAt(front, 1));
+  }
+  // Low continuous shimmer along active cables (not a single blink)
+  const shimmer = 0.28 + 0.22 * Math.sin(t * 4.2 + neuronIndex * 0.7 + radial * 5);
+  peak = Math.min(1.45, peak * 1.2 + Math.max(0, shimmer) * 0.35 * (1 - radial * 0.4));
+  return { peak, arrive };
+}
+
+/** Amplify mid rates so more pathways participate while thinking. */
+function effectiveRate(r: number, drama: number): number {
+  if (drama < 0.05) return r;
+  return Math.min(1, r * 1.55 + 0.06 * drama);
 }
 
 async function loadFilaments(url: string): Promise<Filaments> {
@@ -163,16 +194,16 @@ function Neurons({
       const isSelected = nid !== undefined && nid === selectedId;
       const inFocus = !focusing || (nid !== undefined && focusNeighborIds!.has(nid));
 
-      // Flare when the inward current front arrives at this soma
+      const re = effectiveRate(r, dramaNow);
+      // Flare when any inward front arrives; soft glow between waves
       let pulse = 0;
-      if (pulseOn && r > 0.1) {
-        const front = conductionFront(t, i);
-        const arrive = pulseAt(front, 1); // front==1 ⇒ at soma
-        const spark = Math.pow(Math.max(0, Math.sin(t * 20 + i * 2.7)), 12);
-        pulse = (arrive * 1.35 + spark * 0.35 * arrive) * r * (0.55 + dramaNow);
+      if (pulseOn && re > 0.05) {
+        const { arrive, peak } = conductionStrength(t, i, 0, x, y, z);
+        const glow = 0.22 + 0.18 * Math.max(0, Math.sin(t * 5 + i * 0.9));
+        pulse = (arrive * 1.55 + peak * 0.28 + glow * 0.6) * re * (0.7 + dramaNow * 0.45);
       }
 
-      let scale = 0.038 + r * 0.07 * (0.4 + dramaNow) + pulse * 0.11;
+      let scale = 0.038 + re * 0.075 * (0.4 + dramaNow) + pulse * 0.12;
       if (isSelected) scale *= 1.9;
       else if (inFocus && focusing) scale *= 1.3;
       if (!inFocus) scale *= 0.45;
@@ -183,10 +214,10 @@ function Neurons({
       m.setMatrixAt(i, dummy.matrix);
 
       color.set(populationColor(layout.groups[i]));
-      let boost = 1.05 + r * 1.05 * (0.35 + dramaNow);
-      if (pulse > 0.05) {
-        color.lerp(FLASH_HOT, Math.min(0.92, pulse));
-        boost += pulse * 1.8;
+      let boost = 1.05 + re * 1.1 * (0.35 + dramaNow);
+      if (pulse > 0.04) {
+        color.lerp(FLASH_HOT, Math.min(0.95, pulse));
+        boost += pulse * 2.0;
       }
       if (isSelected) boost = Math.max(boost, 1.85);
       else if (inFocus && focusing) boost = Math.max(boost, 1.25);
@@ -344,7 +375,8 @@ function SkeletonFilaments({
       if (m.g === 3) tmp.multiplyScalar(0.78);
 
       const r = ratesNow?.[m.ni] ?? 0;
-      let boost = 0.92 + r * 1.05 * (0.35 + dramaNow);
+      const re = effectiveRate(r, dramaNow);
+      let boost = 0.88 + re * 1.15 * (0.4 + dramaNow);
       if (focusing) {
         const nid = subnet.neurons[m.ni]?.id;
         const inFocus = nid !== undefined && focusNeighborIds!.has(nid);
@@ -353,19 +385,17 @@ function SkeletonFilaments({
 
       let flashA = 0;
       let flashB = 0;
-      if (pulseOn && r > 0.12) {
-        // Current conducts inward: front 0 at tips → 1 at soma
-        const front = conductionFront(t, m.ni);
-        const target = 1 - m.radial;
-        const hump = pulseAt(front, target);
-        const spark = Math.pow(Math.max(0, Math.sin(t * 18 + m.ni * 3.3)), 14);
-        const amt = Math.min(1.25, (hump * 1.05 + spark * 0.45 * hump) * r * (0.65 + dramaNow));
-        // Lead the front toward the soma: brighter on the end closer to arrival
-        const tA = 1 - m.radialA;
-        const tB = 1 - m.radialB;
-        flashA = amt * (0.4 + pulseAt(front, tA) * 1.2);
-        flashB = amt * (0.4 + pulseAt(front, tB) * 1.2);
-        boost += amt * 0.45;
+      if (pulseOn && re > 0.05) {
+        const { peak } = conductionStrength(t, m.ni, m.radial, m.mx, m.my, m.mz);
+        const amt = Math.min(1.55, peak * re * (0.9 + dramaNow * 0.55));
+        // Lead toward soma: endpoint closer to soma gets the crest first
+        const leadA = m.radialA <= m.radialB ? 1.25 : 0.75;
+        const leadB = m.radialB < m.radialA ? 1.25 : 0.75;
+        flashA = Math.min(1.55, amt * leadA);
+        flashB = Math.min(1.55, amt * leadB);
+        // Light-blue wash so many pathways stay lit between wave crests
+        boost += amt * 0.6;
+        tmp.lerp(FLASH, Math.min(0.6, 0.22 + amt * 0.5));
       }
 
       const o = c * 6;
@@ -384,8 +414,8 @@ function SkeletonFilaments({
 
     if (matRef.current) {
       matRef.current.opacity = focusing
-        ? 0.64 + dramaNow * 0.3
-        : 0.44 + dramaNow * 0.48;
+        ? 0.68 + dramaNow * 0.28
+        : 0.46 + dramaNow * 0.52;
     }
   });
 

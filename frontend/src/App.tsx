@@ -732,7 +732,7 @@ export default function App() {
         });
         setSpikeFrame(frame);
         // Hold thinking long enough for traveling-current pulses to read (~1.5s)
-        await new Promise((r) => setTimeout(r, 1550));
+        await new Promise((r) => setTimeout(r, 1800));
       }
       const pick = pickAiMove(board, {
         allySeat: covenantActive ? 0 : null,
