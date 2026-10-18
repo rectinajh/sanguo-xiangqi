@@ -6,20 +6,6 @@ import type { SpikeFrame } from "@sanguo/shared";
 import { populationColor } from "./populationColor";
 import { useSpikePlayback } from "./useSpikePlayback";
 
-
-function canCreateWebGL(): boolean {
-  try {
-    const canvas = document.createElement("canvas");
-    return !!(
-      canvas.getContext("webgl2") ||
-      canvas.getContext("webgl") ||
-      canvas.getContext("experimental-webgl")
-    );
-  } catch {
-    return false;
-  }
-}
-
 type BoundaryProps = { children: ReactNode; fallback: ReactNode };
 type BoundaryState = { error: Error | null };
 
@@ -87,7 +73,8 @@ function Neurons({
       const r = rates?.[i] ?? 0;
       const isSelected = nid !== undefined && nid === selectedId;
       const inFocus = !focusing || (nid !== undefined && focusNeighborIds!.has(nid));
-      let scale = 0.035 + r * 0.08 * (0.4 + drama);
+      // Idle somata slightly larger so population colors read as a filament cloud
+      let scale = 0.042 + r * 0.09 * (0.4 + drama);
       if (isSelected) scale *= 1.8;
       else if (inFocus && focusing) scale *= 1.25;
       if (!inFocus) scale *= 0.55;
@@ -96,10 +83,11 @@ function Neurons({
       dummy.updateMatrix();
       m.setMatrixAt(i, dummy.matrix);
       color.set(populationColor(layout.groups[i]));
-      let boost = 0.35 + r * 1.4 * (0.3 + drama);
-      if (isSelected) boost = Math.max(boost, 1.6);
-      else if (inFocus && focusing) boost = Math.max(boost, 0.9);
-      if (!inFocus) boost *= 0.22;
+      // Brighter idle base (~0.9) so P1/DN/GABA always read; spikes still boost
+      let boost = 0.9 + r * 1.2 * (0.35 + drama);
+      if (isSelected) boost = Math.max(boost, 1.7);
+      else if (inFocus && focusing) boost = Math.max(boost, 1.15);
+      if (!inFocus) boost *= 0.28;
       color.multiplyScalar(boost);
       m.setColorAt(i, color);
     }
@@ -152,7 +140,7 @@ function Synapses({
     return m;
   }, [subnet]);
 
-  const positions = useMemo(() => {
+  const { positions, colors } = useMemo(() => {
     const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
     let indices: number[];
     if (focusing && focusEdgeIndices && focusEdgeIndices.length) {
@@ -166,7 +154,9 @@ function Synapses({
         .slice(0, maxEdges)
         .map((x) => x.i);
     }
-    const arr: number[] = [];
+    const pos: number[] = [];
+    const col: number[] = [];
+    const tmp = new THREE.Color();
     for (const ei of indices) {
       const syn = subnet.synapses[ei];
       if (!syn) continue;
@@ -178,25 +168,35 @@ function Synapses({
       if (a === undefined || b === undefined) continue;
       const pa = layout.positions[a];
       const pb = layout.positions[b];
-      arr.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+      pos.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
+      // Color filament by pre-neuron population (MaleCNS-style)
+      tmp.set(populationColor(layout.groups[a] ?? "other"));
+      // Keep "other" visible but quieter than keyed pops
+      if ((layout.groups[a] ?? "other") === "other") tmp.multiplyScalar(0.75);
+      col.push(tmp.r, tmp.g, tmp.b, tmp.r, tmp.g, tmp.b);
     }
-    return new Float32Array(arr);
+    return { positions: new Float32Array(pos), colors: new Float32Array(col) };
   }, [layout, subnet, active, maxEdges, idToIndex, focusNeighborIds, focusEdgeIndices]);
 
   const geom = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     return g;
-  }, [positions]);
+  }, [positions, colors]);
 
   const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
+  // Idle filaments must read clearly (was ~0.08 grey — too dim)
+  const opacity = focusing ? 0.55 + drama * 0.25 : 0.32 + drama * 0.38;
 
   return (
     <lineSegments geometry={geom}>
       <lineBasicMaterial
         transparent
-        opacity={focusing ? 0.45 + drama * 0.3 : 0.08 + drama * 0.35}
-        color={focusing || drama > 0.4 ? "#7fd0ff" : "#3a4a5c"}
+        opacity={opacity}
+        vertexColors
+        toneMapped={false}
+        depthWrite={false}
       />
     </lineSegments>
   );
@@ -205,7 +205,7 @@ function Synapses({
 function Spin({ children, enabled }: { children: ReactNode; enabled: boolean }) {
   const ref = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
-    if (enabled && ref.current) ref.current.rotation.y += dt * 0.15;
+    if (enabled && ref.current) ref.current.rotation.y += dt * 0.12;
   });
   return <group ref={ref}>{children}</group>;
 }
@@ -231,7 +231,7 @@ export function ConnectomeScene({
 }) {
   const [layout, setLayout] = useState<Layout | null>(null);
   const [subnet, setSubnet] = useState<Subnet | null>(null);
-  const [maxEdges, setMaxEdges] = useState(12000);
+  const [maxEdges, setMaxEdges] = useState(14000);
   const { displayRates, drama } = useSpikePlayback(frame, thinking);
   const fpsSamples = useRef<number[]>([]);
 
@@ -279,44 +279,47 @@ export function ConnectomeScene({
     return <div className="cyberfly-loading">加载连接组…</div>;
   }
 
-  if (!canCreateWebGL()) {
-    return <WebGlUnavailable />;
-  }
-
   return (
     <WebGlErrorBoundary fallback={<WebGlUnavailable />}>
-    <Canvas
-      camera={{ position: [0, 0.4, 6.2], fov: 45 }}
-      dpr={[1, 1.5]}
-      onPointerMissed={() => {
-        if (interactive && onSelect) onSelect(null);
-      }}
-    >
-      <color attach="background" args={["#0a1018"]} />
-      <ambientLight intensity={0.55} />
-      <pointLight position={[4, 6, 3]} intensity={1.1} />
-      <Spin enabled={autoSpin}>
-        <Neurons
-          layout={layout}
-          subnet={subnet}
-          rates={displayRates}
-          drama={drama}
-          selectedId={selectedId}
-          focusNeighborIds={focusNeighborIds}
-          interactive={interactive}
-          onSelect={onSelect}
-        />
-        <Synapses
-          layout={layout}
-          subnet={subnet}
-          active={frame?.activeEdgeIndices}
-          drama={drama}
-          maxEdges={maxEdges}
-          focusNeighborIds={focusNeighborIds}
-          focusEdgeIndices={focusEdgeIndices}
-        />
-      </Spin>
-      <OrbitControls enablePan={interactive} minDistance={3} maxDistance={12} />
-    </Canvas>
-  </WebGlErrorBoundary>
-  );}
+      <Canvas
+        camera={{ position: [2.4, 0.35, 6.8], fov: 42 }}
+        dpr={[1, 1.5]}
+        gl={{
+          antialias: false,
+          powerPreference: "high-performance",
+          failIfMajorPerformanceCaveat: false,
+        }}
+        onPointerMissed={() => {
+          if (interactive && onSelect) onSelect(null);
+        }}
+      >
+        <color attach="background" args={["#070b12"]} />
+        <ambientLight intensity={0.7} />
+        <pointLight position={[4, 6, 3]} intensity={1.25} />
+        <pointLight position={[-3, -2, 4]} intensity={0.45} />
+        <Spin enabled={autoSpin}>
+          <Neurons
+            layout={layout}
+            subnet={subnet}
+            rates={displayRates}
+            drama={drama}
+            selectedId={selectedId}
+            focusNeighborIds={focusNeighborIds}
+            interactive={interactive}
+            onSelect={onSelect}
+          />
+          <Synapses
+            layout={layout}
+            subnet={subnet}
+            active={frame?.activeEdgeIndices}
+            drama={drama}
+            maxEdges={maxEdges}
+            focusNeighborIds={focusNeighborIds}
+            focusEdgeIndices={focusEdgeIndices}
+          />
+        </Spin>
+        <OrbitControls enablePan={interactive} minDistance={3} maxDistance={14} />
+      </Canvas>
+    </WebGlErrorBoundary>
+  );
+}
