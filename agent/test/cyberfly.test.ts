@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   loadConnectome,
   simulate,
+  simulateDetailed,
+  buildSpikeFrame,
   drivesToBias,
   syntheticSubnet,
   sensorySeed,
@@ -90,6 +92,28 @@ describe("sensorySeed", () => {
     expect(Number.isInteger(s)).toBe(true);
     expect(s).toBeGreaterThanOrEqual(0);
     expect(s).toBeLessThan(2 ** 32);
+  });
+});
+
+
+describe("simulateDetailed / SpikeFrame", () => {
+  it("rates 长度等于神经元数，同 seed 可复现", () => {
+    const sub = syntheticSubnet(48);
+    const seed = sensorySeed(base, 1n, 5);
+    const a = simulateDetailed(sub, base, { seed });
+    const b = simulateDetailed(sub, base, { seed });
+    expect(a.rates.length).toBe(sub.neurons.length);
+    expect(a.rates).toEqual(b.rates);
+    expect(a.drives).toEqual(simulate(sub, base, { seed }));
+  });
+
+  it("buildSpikeFrame 带 neuronIds 与活跃边", () => {
+    const sub = syntheticSubnet(48);
+    const seed = sensorySeed(base, 1n, 5);
+    const frame = buildSpikeFrame(sub, base, { seed, ply: 5, topEdges: 20 });
+    expect(frame.neuronIds.length).toBe(48);
+    expect(frame.rates.length).toBe(48);
+    expect(frame.activeEdgeIndices!.length).toBeLessThanOrEqual(20);
   });
 });
 

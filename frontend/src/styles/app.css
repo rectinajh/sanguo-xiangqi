@@ -365,3 +365,102 @@ button.danger {
 .cell.eco.legal {
   box-shadow: inset 0 0 0 2px rgba(61, 184, 122, 0.7);
 }
+
+
+/* —— cyberfly brain sidebar —— */
+.cyberfly-panel { display: flex; flex-direction: column; gap: 8px; }
+.cyberfly-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cyberfly-badge {
+  font-size: 0.72rem; padding: 0.2rem 0.5rem; border-radius: 999px;
+  background: rgba(255,255,255,0.06); color: var(--muted);
+}
+.cyberfly-badge.on { background: rgba(232,93,76,0.25); color: #ffb4a8; }
+.cyberfly-canvas-wrap {
+  height: 280px; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--border); background: #0a1018;
+}
+.cyberfly-loading {
+  height: 100%; display: grid; place-items: center; color: var(--muted); font-size: 0.85rem;
+}
+.cyberfly-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.72rem; color: var(--muted); }
+.cyberfly-legend-item { display: inline-flex; align-items: center; gap: 4px; }
+.cyberfly-legend-item i {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+}
+.cyberfly-drives { display: flex; flex-direction: column; gap: 6px; }
+.cyberfly-drive {
+  display: grid; grid-template-columns: 2.5rem 1fr 2.2rem; gap: 6px; align-items: center;
+  font-size: 0.78rem;
+}
+.cyberfly-drive-bar {
+  height: 6px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden;
+}
+.cyberfly-drive-bar > div {
+  height: 100%; background: linear-gradient(90deg, var(--green), var(--gold), var(--red));
+}
+.cyberfly-drive em { font-style: normal; color: var(--muted); text-align: right; font-family: var(--mono); font-size: 0.72rem; }
+.cyberfly-disclaimer { margin: 0; font-size: 0.68rem; color: var(--muted); line-height: 1.35; }
+.cyberfly-browser-btn { width: 100%; }
+
+
+/* —— cyberfly neuron browser (fullscreen) —— */
+.neuron-browser {
+  position: fixed; inset: 0; z-index: 80;
+  display: flex; flex-direction: column;
+  background: #070b12; color: var(--text, #e8eef6);
+}
+.neuron-browser-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border, #243044);
+  background: rgba(10,16,24,0.95);
+}
+.neuron-browser-bar h2 { margin: 0; font-size: 1rem; white-space: nowrap; }
+.neuron-browser-search {
+  flex: 1; min-width: 0;
+  padding: 0.45rem 0.7rem; border-radius: 8px;
+  border: 1px solid var(--border, #243044);
+  background: rgba(255,255,255,0.04); color: inherit;
+  font-family: var(--mono, ui-monospace, monospace); font-size: 0.85rem;
+}
+.neuron-browser-body {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 1fr minmax(240px, 300px);
+}
+.neuron-browser-canvas { min-height: 0; background: #0a1018; }
+.neuron-browser-canvas .cyberfly-loading { height: 100%; }
+.neuron-browser-side {
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 12px 14px; border-left: 1px solid var(--border, #243044);
+  overflow: auto; background: rgba(10,16,24,0.9);
+}
+.neuron-browser-side h3 { margin: 0 0 8px; font-size: 0.82rem; color: var(--muted, #8a9bb0); font-weight: 600; }
+.neuron-browser-empty { margin: 0; font-size: 0.8rem; color: var(--muted, #8a9bb0); }
+.neuron-browser-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow: auto; }
+.neuron-browser-hits button {
+  width: 100%; text-align: left;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 0.4rem 0.55rem; border-radius: 8px;
+  border: 1px solid transparent; background: rgba(255,255,255,0.03);
+  color: inherit; cursor: pointer; font-size: 0.78rem;
+}
+.neuron-browser-hits button strong { font-family: var(--mono, ui-monospace, monospace); font-weight: 600; }
+.neuron-browser-hits button span { color: var(--muted, #8a9bb0); font-size: 0.72rem; }
+.neuron-browser-hits button.on,
+.neuron-browser-hits button:hover {
+  border-color: rgba(127,208,255,0.35);
+  background: rgba(127,208,255,0.08);
+}
+.neuron-browser-detail { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.neuron-browser-detail > div {
+  display: grid; grid-template-columns: 4.5rem 1fr; gap: 6px;
+  font-size: 0.8rem;
+}
+.neuron-browser-detail dt { margin: 0; color: var(--muted, #8a9bb0); }
+.neuron-browser-detail dd {
+  margin: 0; font-family: var(--mono, ui-monospace, monospace);
+  word-break: break-all;
+}
+@media (max-width: 720px) {
+  .neuron-browser-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .neuron-browser-side { border-left: none; border-top: 1px solid var(--border, #243044); max-height: 40vh; }
+}

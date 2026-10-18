@@ -8,3 +8,4 @@ export * from "./demoSpine.js";
 export * from "./sanrenMap.js";
 export * from "./sanrenSetup.js";
 export * from "./sanrenGraph.js";
+export * from "./cyberfly.js";
