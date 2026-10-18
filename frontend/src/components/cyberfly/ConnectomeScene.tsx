@@ -50,9 +50,9 @@ type Filaments = {
 
 const GROUP_NAMES = ["P1", "DN", "GABA", "other"] as const;
 
-/** Cyan-white flash for traveling “current” along cables. */
-const FLASH = new THREE.Color("#d8fbff");
-const FLASH_HOT = new THREE.Color("#ffffff");
+/** Soft light-blue flash for traveling current along cables. */
+const FLASH = new THREE.Color("#7ec8ff");
+const FLASH_HOT = new THREE.Color("#a8d8ff");
 /** Normalize cable distance so tips≈1 and soma≈0 for inward conduction. */
 const SOMA_RADIUS = 2.2;
 
