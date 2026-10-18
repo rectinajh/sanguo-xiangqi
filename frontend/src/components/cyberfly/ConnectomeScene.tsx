@@ -33,12 +33,57 @@ type Layout = {
   count: number;
   positions: number[][];
   groups: string[];
+  source?: string;
 };
 
 type Subnet = {
   neurons: { id: number; nt?: string; type?: string }[];
   synapses: { pre: number; post: number; weight: number }[];
 };
+
+type Filaments = {
+  segmentCount: number;
+  positions: Float32Array; // length segmentCount*6
+  groups: Uint8Array; // per segment 0..3
+  neuronIndex: Uint16Array; // per segment → layout index
+};
+
+const GROUP_NAMES = ["P1", "DN", "GABA", "other"] as const;
+
+async function loadFilaments(url: string): Promise<Filaments> {
+  const buf = await fetch(url).then((r) => {
+    if (!r.ok) throw new Error(`filaments ${r.status}`);
+    return r.arrayBuffer();
+  });
+  const view = new DataView(buf);
+  const magic = String.fromCharCode(
+    view.getUint8(0),
+    view.getUint8(1),
+    view.getUint8(2),
+    view.getUint8(3),
+  );
+  if (magic !== "MCNS") throw new Error("bad filaments magic");
+  const version = view.getUint32(4, true);
+  const segmentCount = view.getUint32(8, true);
+  if (version !== 1) throw new Error(`unsupported filaments v${version}`);
+  let offset = 12;
+  const positions = new Float32Array(segmentCount * 6);
+  for (let i = 0; i < positions.length; i++) {
+    positions[i] = view.getFloat32(offset, true);
+    offset += 4;
+  }
+  const groups = new Uint8Array(segmentCount);
+  for (let i = 0; i < segmentCount; i++) {
+    groups[i] = view.getUint8(offset++);
+  }
+  if (offset % 2) offset += 1; // pad to align u16
+  const neuronIndex = new Uint16Array(segmentCount);
+  for (let i = 0; i < segmentCount; i++) {
+    neuronIndex[i] = view.getUint16(offset, true);
+    offset += 2;
+  }
+  return { segmentCount, positions, groups, neuronIndex };
+}
 
 function Neurons({
   layout,
@@ -73,21 +118,20 @@ function Neurons({
       const r = rates?.[i] ?? 0;
       const isSelected = nid !== undefined && nid === selectedId;
       const inFocus = !focusing || (nid !== undefined && focusNeighborIds!.has(nid));
-      // Idle somata slightly larger so population colors read as a filament cloud
-      let scale = 0.042 + r * 0.09 * (0.4 + drama);
-      if (isSelected) scale *= 1.8;
-      else if (inFocus && focusing) scale *= 1.25;
-      if (!inFocus) scale *= 0.55;
+      let scale = 0.038 + r * 0.085 * (0.4 + drama);
+      if (isSelected) scale *= 1.9;
+      else if (inFocus && focusing) scale *= 1.3;
+      if (!inFocus) scale *= 0.45;
       dummy.position.set(x, y, z);
       dummy.scale.setScalar(scale);
       dummy.updateMatrix();
       m.setMatrixAt(i, dummy.matrix);
       color.set(populationColor(layout.groups[i]));
-      // Brighter idle base (~0.9) so P1/DN/GABA always read; spikes still boost
-      let boost = 0.9 + r * 1.2 * (0.35 + drama);
-      if (isSelected) boost = Math.max(boost, 1.7);
-      else if (inFocus && focusing) boost = Math.max(boost, 1.15);
-      if (!inFocus) boost *= 0.28;
+      // Bright idle so population colors always read on anatomical silhouette
+      let boost = 1.05 + r * 1.15 * (0.35 + drama);
+      if (isSelected) boost = Math.max(boost, 1.85);
+      else if (inFocus && focusing) boost = Math.max(boost, 1.25);
+      if (!inFocus) boost *= 0.25;
       color.multiplyScalar(boost);
       m.setColorAt(i, color);
     }
@@ -117,66 +161,84 @@ function Neurons({
   );
 }
 
-function Synapses({
+/** Real MaleCNS SWC cables — visual star of the idle look. */
+function SkeletonFilaments({
+  filaments,
   layout,
   subnet,
-  active,
+  rates,
   drama,
-  maxEdges,
+  maxSegments,
   focusNeighborIds,
-  focusEdgeIndices,
 }: {
+  filaments: Filaments;
   layout: Layout;
   subnet: Subnet;
-  active: number[] | undefined;
+  rates: number[] | null;
   drama: number;
-  maxEdges: number;
+  maxSegments: number;
   focusNeighborIds?: Set<number> | null;
-  focusEdgeIndices?: number[] | null;
 }) {
-  const idToIndex = useMemo(() => {
-    const m = new Map<number, number>();
-    subnet.neurons.forEach((n, i) => m.set(n.id, i));
-    return m;
-  }, [subnet]);
+  const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
+  const palette = useMemo(
+    () => GROUP_NAMES.map((g) => new THREE.Color(populationColor(g))),
+    [],
+  );
 
   const { positions, colors } = useMemo(() => {
-    const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
-    let indices: number[];
-    if (focusing && focusEdgeIndices && focusEdgeIndices.length) {
-      indices = focusEdgeIndices;
-    } else if (active && active.length) {
-      indices = active;
-    } else {
-      indices = subnet.synapses
-        .map((s, i) => ({ i, w: Math.abs(s.weight) }))
-        .sort((a, b) => b.w - a.w)
-        .slice(0, maxEdges)
-        .map((x) => x.i);
-    }
-    const pos: number[] = [];
-    const col: number[] = [];
-    const tmp = new THREE.Color();
-    for (const ei of indices) {
-      const syn = subnet.synapses[ei];
-      if (!syn) continue;
-      if (focusing && (!focusNeighborIds!.has(syn.pre) || !focusNeighborIds!.has(syn.post))) {
-        continue;
+    const total = filaments.segmentCount;
+    const cap = Math.min(total, Math.max(2000, maxSegments));
+    // When focusing, prefer segments of focused neurons; else take first `cap`
+    // (already stratified at build time across the full subnet).
+    const chosen: number[] = [];
+    if (focusing) {
+      for (let i = 0; i < total && chosen.length < cap; i++) {
+        const ni = filaments.neuronIndex[i];
+        const nid = subnet.neurons[ni]?.id;
+        if (nid !== undefined && focusNeighborIds!.has(nid)) chosen.push(i);
       }
-      const a = idToIndex.get(syn.pre);
-      const b = idToIndex.get(syn.post);
-      if (a === undefined || b === undefined) continue;
-      const pa = layout.positions[a];
-      const pb = layout.positions[b];
-      pos.push(pa[0], pa[1], pa[2], pb[0], pb[1], pb[2]);
-      // Color filament by pre-neuron population (MaleCNS-style)
-      tmp.set(populationColor(layout.groups[a] ?? "other"));
-      // Keep "other" visible but quieter than keyed pops
-      if ((layout.groups[a] ?? "other") === "other") tmp.multiplyScalar(0.75);
-      col.push(tmp.r, tmp.g, tmp.b, tmp.r, tmp.g, tmp.b);
+      // Pad with a thin global sample so anatomy still reads
+      const pad = Math.min(cap, Math.floor(cap * 0.15));
+      for (let i = 0; i < total && chosen.length < cap; i += Math.max(1, Math.floor(total / pad))) {
+        chosen.push(i);
+      }
+    } else {
+      const stride = total <= cap ? 1 : total / cap;
+      for (let k = 0; k < cap; k++) chosen.push(Math.min(total - 1, Math.floor(k * stride)));
     }
-    return { positions: new Float32Array(pos), colors: new Float32Array(col) };
-  }, [layout, subnet, active, maxEdges, idToIndex, focusNeighborIds, focusEdgeIndices]);
+
+    const pos = new Float32Array(chosen.length * 6);
+    const col = new Float32Array(chosen.length * 6);
+    const tmp = new THREE.Color();
+    for (let c = 0; c < chosen.length; c++) {
+      const i = chosen[c];
+      const base = i * 6;
+      const o = c * 6;
+      for (let k = 0; k < 6; k++) pos[o + k] = filaments.positions[base + k];
+
+      const g = filaments.groups[i] ?? 3;
+      tmp.copy(palette[g] ?? palette[3]);
+      if (g === 3) tmp.multiplyScalar(0.78);
+
+      const ni = filaments.neuronIndex[i];
+      const nid = subnet.neurons[ni]?.id;
+      const r = rates?.[ni] ?? 0;
+      let boost = 0.92 + r * 1.1 * (0.35 + drama);
+      if (focusing) {
+        const inFocus = nid !== undefined && focusNeighborIds!.has(nid);
+        boost *= inFocus ? 1.25 : 0.22;
+      }
+      tmp.multiplyScalar(boost);
+      // both endpoints same color
+      col[o] = tmp.r;
+      col[o + 1] = tmp.g;
+      col[o + 2] = tmp.b;
+      col[o + 3] = tmp.r;
+      col[o + 4] = tmp.g;
+      col[o + 5] = tmp.b;
+    }
+    return { positions: pos, colors: col };
+  }, [filaments, layout, subnet, rates, drama, maxSegments, focusNeighborIds, focusing, palette]);
 
   const geom = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -185,9 +247,7 @@ function Synapses({
     return g;
   }, [positions, colors]);
 
-  const focusing = !!(focusNeighborIds && focusNeighborIds.size > 0);
-  // Idle filaments must read clearly (was ~0.08 grey — too dim)
-  const opacity = focusing ? 0.55 + drama * 0.25 : 0.32 + drama * 0.38;
+  const opacity = focusing ? 0.62 + drama * 0.25 : 0.42 + drama * 0.35;
 
   return (
     <lineSegments geometry={geom}>
@@ -205,7 +265,7 @@ function Synapses({
 function Spin({ children, enabled }: { children: ReactNode; enabled: boolean }) {
   const ref = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
-    if (enabled && ref.current) ref.current.rotation.y += dt * 0.12;
+    if (enabled && ref.current) ref.current.rotation.y += dt * 0.1;
   });
   return <group ref={ref}>{children}</group>;
 }
@@ -231,21 +291,27 @@ export function ConnectomeScene({
 }) {
   const [layout, setLayout] = useState<Layout | null>(null);
   const [subnet, setSubnet] = useState<Subnet | null>(null);
-  const [maxEdges, setMaxEdges] = useState(14000);
+  const [filaments, setFilaments] = useState<Filaments | null>(null);
+  const [maxSegments, setMaxSegments] = useState(70000);
   const { displayRates, drama } = useSpikePlayback(frame, thinking);
   const fpsSamples = useRef<number[]>([]);
+
+  // focusEdgeIndices kept in API for NeuronBrowser compat (synapse overlay unused when SWC present)
+  void focusEdgeIndices;
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [l, s] = await Promise.all([
+        const [l, s, f] = await Promise.all([
           fetch("/cyberfly/layout.json").then((r) => r.json()),
           fetch("/cyberfly/subnet.json").then((r) => r.json()),
+          loadFilaments("/cyberfly/filaments.bin"),
         ]);
         if (!cancelled) {
           setLayout(l);
           setSubnet(s);
+          setFilaments(f);
         }
       } catch {
         /* soft-fail: parent shows drives only */
@@ -267,22 +333,24 @@ export function ConnectomeScene({
       if (samples.length > 45) samples.shift();
       if (samples.length === 45) {
         const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-        if (avg > 33 && maxEdges > 2000) setMaxEdges((m) => Math.max(2000, Math.floor(m * 0.7)));
+        if (avg > 33 && maxSegments > 12000) {
+          setMaxSegments((m) => Math.max(12000, Math.floor(m * 0.72)));
+        }
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [maxEdges]);
+  }, [maxSegments]);
 
-  if (!layout || !subnet) {
-    return <div className="cyberfly-loading">加载连接组…</div>;
+  if (!layout || !subnet || !filaments) {
+    return <div className="cyberfly-loading">加载 MaleCNS 骨架…</div>;
   }
 
   return (
     <WebGlErrorBoundary fallback={<WebGlUnavailable />}>
       <Canvas
-        camera={{ position: [2.4, 0.35, 6.8], fov: 42 }}
+        camera={{ position: [3.2, 0.6, 5.6], fov: 40 }}
         dpr={[1, 1.5]}
         gl={{
           antialias: false,
@@ -293,11 +361,20 @@ export function ConnectomeScene({
           if (interactive && onSelect) onSelect(null);
         }}
       >
-        <color attach="background" args={["#070b12"]} />
-        <ambientLight intensity={0.7} />
-        <pointLight position={[4, 6, 3]} intensity={1.25} />
-        <pointLight position={[-3, -2, 4]} intensity={0.45} />
+        <color attach="background" args={["#05080e"]} />
+        <ambientLight intensity={0.75} />
+        <pointLight position={[5, 7, 4]} intensity={1.2} />
+        <pointLight position={[-4, -3, 5]} intensity={0.4} />
         <Spin enabled={autoSpin}>
+          <SkeletonFilaments
+            filaments={filaments}
+            layout={layout}
+            subnet={subnet}
+            rates={displayRates}
+            drama={drama}
+            maxSegments={maxSegments}
+            focusNeighborIds={focusNeighborIds}
+          />
           <Neurons
             layout={layout}
             subnet={subnet}
@@ -308,17 +385,8 @@ export function ConnectomeScene({
             interactive={interactive}
             onSelect={onSelect}
           />
-          <Synapses
-            layout={layout}
-            subnet={subnet}
-            active={frame?.activeEdgeIndices}
-            drama={drama}
-            maxEdges={maxEdges}
-            focusNeighborIds={focusNeighborIds}
-            focusEdgeIndices={focusEdgeIndices}
-          />
         </Spin>
-        <OrbitControls enablePan={interactive} minDistance={3} maxDistance={14} />
+        <OrbitControls enablePan={interactive} minDistance={2.5} maxDistance={16} target={[0, 0.1, 0]} />
       </Canvas>
     </WebGlErrorBoundary>
   );

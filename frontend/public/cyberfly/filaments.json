@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "file": "filaments.bin",
+  "segmentCount": 88746,
+  "groups": [
+    "P1",
+    "DN",
+    "GABA",
+    "other"
+  ],
+  "attribution": "MaleCNS CC-BY (Janelia FlyEM)"
+}
