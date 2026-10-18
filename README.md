@@ -27,9 +27,10 @@ language model supplies the excuse.
 
 ![The board](docs/diagrams/board.png)
 
-**The board is a 154-node directed graph, not a grid.** Three camps — 魏, 吴, 蜀 — face a
-single contested centre, and every edge carries a direction. That is why "who is winning" is
-never a fact and always a negotiation.
+**The board is a 154-node directed graph, not a grid** — cream paper, thin red lines, three camps
+(魏 / 吴 / 蜀) around a contested centre. On the right, **果蝇大脑 AI 决策** shows MaleCNS
+connectome dynamics while the agent thinks. Every edge still carries a direction; "who is winning"
+is never a fact and always a negotiation.
 
 Each piece carries a price. A soldier shuffle costs ~0.009 MON; a chariot raid up to ~0.578.
 And the geography is not decoration — **crossing the river is a different move from
