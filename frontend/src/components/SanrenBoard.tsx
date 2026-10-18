@@ -3,11 +3,13 @@ import { SANREN_MAP, nextCamp, sanrenPieceLabel, type MapPiece } from "@sanguo/s
 import { segmentPath, type Project } from "./sanrenPath";
 
 const U = 100;
-const LINE = "#cf3a72";
-const GUIDE = "#c44a6e";
-const PAPER = "#f7f4ef";
-const LABEL = "#d4416f";
-const SEAT_INK = ["#c22a2f", "#1e2422", "#1f8a4c"];
+/** Clean reference: cream field, thin vibrant red lines, seat-ink disks. */
+const LINE = "#e0353a";
+const GUIDE = "#e0454a";
+const PAPER = "#faf6ef";
+const LABEL = "#e85a5e";
+const SEAT_INK = ["#d4212a", "#1a1a1a", "#1a9a4a"];
+const PIECE_FACE = "#fffcf7";
 const PIECE_R = 0.26 * U;
 const RING_R = 0.14 * U;
 const FACE = "Kaiti SC, STKaiti, KaiTi, Songti SC, Noto Serif SC, serif";
@@ -188,19 +190,15 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
       <svg viewBox={vb.join(" ")} role="img" aria-label="三国围棋棋盘">
         <defs>
           <filter id="sanrenShadow" x="-40%" y="-40%" width="180%" height="180%">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#3a2a22" floodOpacity="0.22" />
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1.6" floodColor="#000000" floodOpacity="0.16" />
           </filter>
-          <radialGradient id="sanrenFace" cx="42%" cy="36%" r="70%">
-            <stop offset="0%" stopColor="#fffdf7" />
-            <stop offset="100%" stopColor="#efe6d3" />
-          </radialGradient>
         </defs>
 
         <rect x={vb[0]} y={vb[1]} width={vb[2]} height={vb[3]} fill={PAPER} />
         <rect x={vb[0] + 14} y={vb[1] + 14} width={vb[2] - 28} height={vb[3] - 28} fill="none" stroke={LINE} strokeWidth="5" />
         <rect x={vb[0] + 26} y={vb[1] + 26} width={vb[2] - 52} height={vb[3] - 52} fill="none" stroke={LINE} strokeWidth="1.6" />
 
-        <g fill={LABEL} fontFamily={FACE} fontWeight="700" textAnchor="middle" dominantBaseline="central" opacity="0.92">
+        <g fill={LABEL} fontFamily={FACE} fontWeight="700" textAnchor="middle" dominantBaseline="central" opacity="0.55">
           <text x={-0.6 * U} y={-5.85 * U} fontSize={0.85 * U}>
             棋
           </text>
@@ -221,14 +219,14 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
           </text>
         </g>
 
-        <g fill="none" stroke={LINE} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.88">
+        <g fill="none" stroke={LINE} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" opacity="0.95">
           {paths.map((d, i) => (
             <path key={i} d={d} />
           ))}
         </g>
 
         {islandRing && (
-          <path d={islandRing} fill="none" stroke={GUIDE} strokeWidth="2.5" strokeDasharray="5 5" opacity="0.32" />
+          <path d={islandRing} fill="none" stroke={GUIDE} strokeWidth="1.8" strokeDasharray="5 5" opacity="0.28" />
         )}
 
         <g fill={GUIDE} opacity="0.5">
@@ -291,7 +289,7 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
         {map.nodes
           .filter((n) => n.kind === "gate" || n.kind === "inner")
           .map((n) => (
-            <circle key={`ring-${n.id}`} cx={n.x * U} cy={n.y * U} r={RING_R} fill={PAPER} stroke={LINE} strokeWidth="2.8" />
+            <circle key={`ring-${n.id}`} cx={n.x * U} cy={n.y * U} r={RING_R} fill={PAPER} stroke={LINE} strokeWidth="2.0" />
           ))}
 
         {map.nodes.map((n) => {
@@ -303,7 +301,7 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
               cx={n.x * U}
               cy={n.y * U}
               r={cap ? PIECE_R + 5 : 9}
-              fill={cap ? "none" : "rgba(207,58,114,0.35)"}
+              fill={cap ? "none" : "rgba(224,53,58,0.32)"}
               stroke={cap ? "#c0392b" : "none"}
               strokeWidth="3"
             />
@@ -317,9 +315,9 @@ export function SanrenBoard({ pieces, selected = null, targets = [], onNode }: P
             <g key={`p-${p.node}`} transform={`translate(${n.x * U} ${n.y * U})`} style={{ pointerEvents: "none" }}>
               {selected === p.node && <circle r={PIECE_R + 5} fill="none" stroke="#e0a43a" strokeWidth="3" />}
               <g filter="url(#sanrenShadow)">
-                <circle r={PIECE_R} fill="url(#sanrenFace)" stroke="#d6c8ab" strokeWidth="1.6" />
+                <circle r={PIECE_R} fill={PIECE_FACE} stroke={ink} strokeWidth="1.7" />
               </g>
-              <circle r={PIECE_R - 3.5} fill="none" stroke={ink} strokeWidth="1.3" opacity="0.55" />
+              <circle r={PIECE_R - 4} fill="none" stroke={ink} strokeWidth="1.05" opacity="0.35" />
               <text textAnchor="middle" dominantBaseline="central" y="0.5" fill={ink} fontSize={0.34 * U} fontWeight="700" fontFamily={FACE}>
                 {sanrenPieceLabel(p.piece, p.seat)}
               </text>

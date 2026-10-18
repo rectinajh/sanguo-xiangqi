@@ -53,9 +53,36 @@ const GROUP_NAMES = ["P1", "DN", "GABA", "other"] as const;
 /** Cyan-white flash for traveling “current” along cables. */
 const FLASH = new THREE.Color("#d8fbff");
 const FLASH_HOT = new THREE.Color("#ffffff");
+/** Normalize cable distance so tips≈1 and soma≈0 for inward conduction. */
+const SOMA_RADIUS = 2.2;
 
 function fract(x: number): number {
   return x - Math.floor(x);
+}
+
+/** Shared wave clock: 0 at periphery → 1 at soma (then wraps). */
+function conductionFront(t: number, neuronIndex: number): number {
+  return fract(t * 2.15 + neuronIndex * 0.173);
+}
+
+function radialFromSoma(
+  x: number,
+  y: number,
+  z: number,
+  sx: number,
+  sy: number,
+  sz: number,
+): number {
+  return Math.min(1, Math.hypot(x - sx, y - sy, z - sz) / SOMA_RADIUS);
+}
+
+/** Narrow pulse envelope around the traveling front. */
+function pulseAt(front: number, target: number): number {
+  let d = Math.abs(front - target);
+  if (d > 0.5) d = 1 - d; // wrap
+  let h = 1 - d * 5.8;
+  if (h <= 0) return 0;
+  return h * h;
 }
 
 async function loadFilaments(url: string): Promise<Filaments> {
@@ -136,16 +163,16 @@ function Neurons({
       const isSelected = nid !== undefined && nid === selectedId;
       const inFocus = !focusing || (nid !== undefined && focusNeighborIds!.has(nid));
 
+      // Flare when the inward current front arrives at this soma
       let pulse = 0;
       if (pulseOn && r > 0.1) {
-        // Soma scintillation — sharp peaks like discharge
-        const phase = fract(t * 3.2 + i * 0.191 + y * 0.4);
-        const wave = Math.max(0, 1 - Math.abs(phase - 0.5) * 5);
-        const spark = Math.pow(Math.max(0, Math.sin(t * 16 + i * 2.7)), 10);
-        pulse = (wave * wave * 0.75 + spark * 0.9) * r * dramaNow;
+        const front = conductionFront(t, i);
+        const arrive = pulseAt(front, 1); // front==1 ⇒ at soma
+        const spark = Math.pow(Math.max(0, Math.sin(t * 20 + i * 2.7)), 12);
+        pulse = (arrive * 1.35 + spark * 0.35 * arrive) * r * (0.55 + dramaNow);
       }
 
-      let scale = 0.038 + r * 0.085 * (0.4 + dramaNow) + pulse * 0.07;
+      let scale = 0.038 + r * 0.07 * (0.4 + dramaNow) + pulse * 0.11;
       if (isSelected) scale *= 1.9;
       else if (inFocus && focusing) scale *= 1.3;
       if (!inFocus) scale *= 0.45;
@@ -156,10 +183,10 @@ function Neurons({
       m.setMatrixAt(i, dummy.matrix);
 
       color.set(populationColor(layout.groups[i]));
-      let boost = 1.05 + r * 1.15 * (0.35 + dramaNow);
+      let boost = 1.05 + r * 1.05 * (0.35 + dramaNow);
       if (pulse > 0.05) {
-        color.lerp(FLASH_HOT, Math.min(0.85, pulse));
-        boost += pulse * 1.4;
+        color.lerp(FLASH_HOT, Math.min(0.92, pulse));
+        boost += pulse * 1.8;
       }
       if (isSelected) boost = Math.max(boost, 1.85);
       else if (inFocus && focusing) boost = Math.max(boost, 1.25);
@@ -193,11 +220,22 @@ function Neurons({
   );
 }
 
-type SegMeta = { ni: number; g: number; mx: number; my: number; mz: number };
+type SegMeta = {
+  ni: number;
+  g: number;
+  mx: number;
+  my: number;
+  mz: number;
+  /** 0 at soma … 1 at tip (for inward conduction). */
+  radial: number;
+  radialA: number;
+  radialB: number;
+};
 
 /** Real MaleCNS SWC cables + traveling current while thinking. */
 function SkeletonFilaments({
   filaments,
+  layout,
   subnet,
   rates,
   drama,
@@ -259,16 +297,24 @@ function SkeletonFilaments({
       const bx = pos[o + 3];
       const by = pos[o + 4];
       const bz = pos[o + 5];
+      const ni = filaments.neuronIndex[i];
+      const soma = layout.positions[ni] ?? [0, 0, 0];
+      const mx = (ax + bx) * 0.5;
+      const my = (ay + by) * 0.5;
+      const mz = (az + bz) * 0.5;
       metas[c] = {
-        ni: filaments.neuronIndex[i],
+        ni,
         g: filaments.groups[i] ?? 3,
-        mx: (ax + bx) * 0.5,
-        my: (ay + by) * 0.5,
-        mz: (az + bz) * 0.5,
+        mx,
+        my,
+        mz,
+        radial: radialFromSoma(mx, my, mz, soma[0], soma[1], soma[2]),
+        radialA: radialFromSoma(ax, ay, az, soma[0], soma[1], soma[2]),
+        radialB: radialFromSoma(bx, by, bz, soma[0], soma[1], soma[2]),
       };
     }
     return { positions: pos, meta: metas };
-  }, [filaments, subnet, maxSegments, focusNeighborIds, focusing]);
+  }, [filaments, layout, subnet, maxSegments, focusNeighborIds, focusing]);
 
   const geom = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -308,19 +354,18 @@ function SkeletonFilaments({
       let flashA = 0;
       let flashB = 0;
       if (pulseOn && r > 0.12) {
-        // Traveling pulse along cables (spatial phase + neuron offset)
-        const phase = fract(t * 2.6 + m.ni * 0.137 + m.my * 0.55 + m.mx * 0.32 + m.mz * 0.18);
-        // Narrow hump → looks like a charge packet sliding along the nerve
-        let hump = 1 - Math.abs(phase - 0.5) * 4.2;
-        hump = Math.max(0, hump);
-        hump = hump * hump;
-        // Sharp electrical sparkle
-        const spark = Math.pow(Math.max(0, Math.sin(t * 18 + m.ni * 3.3 + m.my * 2)), 14);
-        const amt = Math.min(1.15, (hump * 0.95 + spark * 0.7) * r * (0.55 + dramaNow * 0.9));
-        // Directional: leading vs trailing endpoint of the segment
-        flashA = amt * (0.35 + (1 - phase) * 0.9);
-        flashB = amt * (0.35 + phase * 0.9);
-        boost += amt * 0.35;
+        // Current conducts inward: front 0 at tips → 1 at soma
+        const front = conductionFront(t, m.ni);
+        const target = 1 - m.radial;
+        const hump = pulseAt(front, target);
+        const spark = Math.pow(Math.max(0, Math.sin(t * 18 + m.ni * 3.3)), 14);
+        const amt = Math.min(1.25, (hump * 1.05 + spark * 0.45 * hump) * r * (0.65 + dramaNow));
+        // Lead the front toward the soma: brighter on the end closer to arrival
+        const tA = 1 - m.radialA;
+        const tB = 1 - m.radialB;
+        flashA = amt * (0.4 + pulseAt(front, tA) * 1.2);
+        flashB = amt * (0.4 + pulseAt(front, tB) * 1.2);
+        boost += amt * 0.45;
       }
 
       const o = c * 6;
@@ -339,8 +384,8 @@ function SkeletonFilaments({
 
     if (matRef.current) {
       matRef.current.opacity = focusing
-        ? 0.62 + dramaNow * 0.28
-        : 0.42 + dramaNow * 0.4;
+        ? 0.64 + dramaNow * 0.3
+        : 0.44 + dramaNow * 0.48;
     }
   });
 

@@ -162,9 +162,9 @@ button.danger {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  background: #f7f4ef;
+  background: #faf6ef;
   border-radius: 2px;
-  box-shadow: 0 10px 28px rgba(80, 30, 30, 0.18);
+  box-shadow: 0 8px 24px rgba(40, 40, 40, 0.12);
 }
 .sanren svg {
   display: block;
@@ -178,12 +178,12 @@ button.danger {
   text-align: center;
   font-size: 0.82rem;
   line-height: 1.55;
-  color: #6a3a48;
-  background: #f7f4ef;
-  border-top: 1px solid rgba(207, 58, 114, 0.18);
+  color: #6a4040;
+  background: #faf6ef;
+  border-top: 1px solid rgba(224, 53, 58, 0.16);
 }
 .sanren-hint strong {
-  color: #b01848;
+  color: #c41e24;
   font-weight: 700;
 }
 

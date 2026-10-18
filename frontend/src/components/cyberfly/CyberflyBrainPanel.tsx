@@ -17,7 +17,7 @@ export function CyberflyBrainPanel({
     <>
       <div className="panel cyberfly-panel">
         <div className="cyberfly-head">
-          <h2 style={{ margin: 0 }}>果蝇大脑</h2>
+          <h2 style={{ margin: 0 }}>果蝇大脑 AI 决策</h2>
           <span className={`cyberfly-badge ${thinking ? "on" : ""}`}>
             {thinking ? "思考放电中" : "旁观"}
           </span>
