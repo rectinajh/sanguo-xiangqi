@@ -1,10 +1,46 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { SpikeFrame } from "@sanguo/shared";
 import { populationColor } from "./populationColor";
 import { useSpikePlayback } from "./useSpikePlayback";
+
+
+function canCreateWebGL(): boolean {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(
+      canvas.getContext("webgl2") ||
+      canvas.getContext("webgl") ||
+      canvas.getContext("experimental-webgl")
+    );
+  } catch {
+    return false;
+  }
+}
+
+type BoundaryProps = { children: ReactNode; fallback: ReactNode };
+type BoundaryState = { error: Error | null };
+
+class WebGlErrorBoundary extends React.Component<BoundaryProps, BoundaryState> {
+  state: BoundaryState = { error: null };
+  static getDerivedStateFromError(error: Error): BoundaryState {
+    return { error };
+  }
+  render() {
+    if (this.state.error) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
+function WebGlUnavailable() {
+  return (
+    <div className="cyberfly-loading">
+      三维连接组需要 WebGL；当前环境不可用，驱动条仍可用。
+    </div>
+  );
+}
 
 type Layout = {
   version: number;
@@ -243,7 +279,12 @@ export function ConnectomeScene({
     return <div className="cyberfly-loading">加载连接组…</div>;
   }
 
+  if (!canCreateWebGL()) {
+    return <WebGlUnavailable />;
+  }
+
   return (
+    <WebGlErrorBoundary fallback={<WebGlUnavailable />}>
     <Canvas
       camera={{ position: [0, 0.4, 6.2], fov: 45 }}
       dpr={[1, 1.5]}
@@ -277,5 +318,5 @@ export function ConnectomeScene({
       </Spin>
       <OrbitControls enablePan={interactive} minDistance={3} maxDistance={12} />
     </Canvas>
-  );
-}
+  </WebGlErrorBoundary>
+  );}
